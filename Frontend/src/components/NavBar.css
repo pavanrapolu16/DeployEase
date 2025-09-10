@@ -1,0 +1,132 @@
+/* NavBar.css */
+
+/* Whole navbar background */
+.custom-navbar {
+  background-color: #0b0d17; /* Render-like dark background */
+  padding: 0.75rem 1.5rem;
+  width: 100vw;
+  position: fixed;
+  top: 0;
+  right: 0;
+  left: 0;
+  z-index: 1000;
+}
+
+/* Brand */
+.custom-navbar .navbar-brand {
+  font-weight: 600;
+  color: #ffffff !important;
+  font-size: 1.25rem;
+  margin-right: 2rem;
+}
+
+/* Nav links */
+.custom-navbar .nav-link {
+  color: #cbd5e1 !important; /* muted gray */
+  margin-right: 1rem;
+  transition: color 0.2s ease;
+}
+
+.custom-navbar .nav-link:hover {
+  color: #ffffff !important;
+}
+
+/* Dropdown */
+.custom-navbar .dropdown-menu {
+  background-color: #1a1d29;
+  border: none;
+}
+
+.custom-navbar .dropdown-item {
+  color: #e2e8f0;
+}
+
+.custom-navbar .dropdown-item:hover {
+  background-color: #2d3244;
+  color: #ffffff;
+}
+
+/* Buttons (Login / Signup style) */
+.custom-navbar .btn-login {
+  border: 1px solid #475569;
+  color: #cbd5e1;
+  padding: 0.4rem 0.9rem;
+  border-radius: 6px;
+  margin-right: 0.5rem;
+  transition: background-color 0.2s ease;
+}
+
+.custom-navbar .btn-login:hover {
+  background-color: #1e293b;
+  color: #ffffff;
+}
+
+.custom-navbar .btn-signup {
+  background-color: #3b82f6;
+  color: #ffffff;
+  padding: 0.4rem 0.9rem;
+  border-radius: 6px;
+  border: none;
+  transition: background-color 0.2s ease;
+}
+
+.custom-navbar .btn-signup:hover {
+  background-color: #2563eb;
+}
+
+/* Responsive actions container */
+.navbar-actions {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  justify-content: flex-end;
+  width: 100%;
+}
+
+/* Avatar styling */
+.navbar-avatar {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  margin-left: 0.5rem;
+  border-radius: 50%;
+  background: #1a1d29;
+  width: 36px;
+  height: 36px;
+  overflow: hidden;
+  box-shadow: 0 1px 4px rgba(0,0,0,0.08);
+  margin-right: 0;
+}
+/* Make container align content to right */
+.custom-navbar .container {
+  display: flex;
+  align-items: center;
+  justify-content: flex-end;
+  max-width: 100vw;
+}
+.navbar-avatar img {
+  width: 32px;
+  height: 32px;
+  object-fit: cover;
+}
+
+@media (max-width: 991px) {
+  .navbar-actions {
+    flex-direction: column;
+    gap: 0.25rem;
+    margin-top: 1rem;
+    width: 100%;
+    align-items: stretch;
+  }
+  .custom-navbar .btn-login,
+  .custom-navbar .btn-signup {
+    width: 100%;
+    margin-right: 0;
+    margin-bottom: 0.5rem;
+  }
+  .navbar-avatar {
+    margin-left: 0;
+    margin-bottom: 0.5rem;
+    align-self: flex-start;
+  }
+}

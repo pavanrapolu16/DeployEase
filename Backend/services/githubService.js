@@ -1,0 +1,192 @@
+const axios = require('axios');
+
+class GitHubService {
+  constructor() {
+    this.baseURL = 'https://api.github.com';
+  }
+
+  /**
+   * Get user repositories
+   * @param {string} accessToken - GitHub OAuth access token
+   * @param {number} page - Page number (default: 1)
+   * @param {number} perPage - Repos per page (default: 30, max: 100)
+   * @returns {Promise<Array>} Array of repository objects
+   */
+  async getUserRepos(accessToken, page = 1, perPage = 30) {
+    try {
+      const response = await axios.get(`${this.baseURL}/user/repos`, {
+        headers: {
+          'Authorization': `token ${accessToken}`,
+          'Accept': 'application/vnd.github.v3+json',
+          'User-Agent': 'DeployEase-App'
+        },
+        params: {
+          page,
+          per_page: Math.min(perPage, 100), // GitHub API limit
+          sort: 'updated',
+          type: 'owner' // Only repos owned by the user
+        }
+      });
+
+      return response.data.map(repo => ({
+        id: repo.id,
+        name: repo.name,
+        fullName: repo.full_name,
+        description: repo.description,
+        url: repo.html_url,
+        cloneUrl: repo.clone_url,
+        sshUrl: repo.ssh_url,
+        language: repo.language,
+        stars: repo.stargazers_count,
+        forks: repo.forks_count,
+        isPrivate: repo.private,
+        isFork: repo.fork,
+        createdAt: repo.created_at,
+        updatedAt: repo.updated_at,
+        defaultBranch: repo.default_branch,
+        topics: repo.topics || []
+      }));
+    } catch (error) {
+      console.error('Error fetching GitHub repos:', error.response?.data || error.message);
+      throw new Error('Failed to fetch repositories from GitHub');
+    }
+  }
+
+  /**
+   * Get repository details
+   * @param {string} owner - Repository owner
+   * @param {string} repo - Repository name
+   * @param {string} accessToken - GitHub OAuth access token
+   * @returns {Promise<Object>} Repository details
+   */
+  async getRepoDetails(owner, repo, accessToken) {
+    try {
+      const response = await axios.get(`${this.baseURL}/repos/${owner}/${repo}`, {
+        headers: {
+          'Authorization': `token ${accessToken}`,
+          'Accept': 'application/vnd.github.v3+json',
+          'User-Agent': 'DeployEase-App'
+        }
+      });
+
+      const data = response.data;
+      return {
+        id: data.id,
+        name: data.name,
+        fullName: data.full_name,
+        description: data.description,
+        url: data.html_url,
+        cloneUrl: data.clone_url,
+        sshUrl: data.ssh_url,
+        language: data.language,
+        stars: data.stargazers_count,
+        forks: data.forks_count,
+        isPrivate: data.private,
+        isFork: data.fork,
+        defaultBranch: data.default_branch,
+        topics: data.topics || [],
+        createdAt: data.created_at,
+        updatedAt: data.updated_at,
+        size: data.size,
+        hasIssues: data.has_issues,
+        hasProjects: data.has_projects,
+        hasWiki: data.has_wiki,
+        hasPages: data.has_pages,
+        hasDownloads: data.has_downloads
+      };
+    } catch (error) {
+      console.error('Error fetching repo details:', error.response?.data || error.message);
+      throw new Error('Failed to fetch repository details from GitHub');
+    }
+  }
+
+  /**
+   * Get repository branches
+   * @param {string} owner - Repository owner
+   * @param {string} repo - Repository name
+   * @param {string} accessToken - GitHub OAuth access token
+   * @returns {Promise<Array>} Array of branch objects
+   */
+  async getRepoBranches(owner, repo, accessToken) {
+    try {
+      const response = await axios.get(`${this.baseURL}/repos/${owner}/${repo}/branches`, {
+        headers: {
+          'Authorization': `token ${accessToken}`,
+          'Accept': 'application/vnd.github.v3+json',
+          'User-Agent': 'DeployEase-App'
+        }
+      });
+
+      return response.data.map(branch => ({
+        name: branch.name,
+        sha: branch.commit.sha,
+        protected: branch.protected
+      }));
+    } catch (error) {
+      console.error('Error fetching repo branches:', error.response?.data || error.message);
+      throw new Error('Failed to fetch repository branches from GitHub');
+    }
+  }
+
+  /**
+   * Get repository contents (for detecting build configuration)
+   * @param {string} owner - Repository owner
+   * @param {string} repo - Repository name
+   * @param {string} path - Path to get contents for (default: root)
+   * @param {string} accessToken - GitHub OAuth access token
+   * @returns {Promise<Array>} Array of file/directory objects
+   */
+  async getRepoContents(owner, repo, path = '', accessToken) {
+    try {
+      const response = await axios.get(`${this.baseURL}/repos/${owner}/${repo}/contents/${path}`, {
+        headers: {
+          'Authorization': `token ${accessToken}`,
+          'Accept': 'application/vnd.github.v3+json',
+          'User-Agent': 'DeployEase-App'
+        }
+      });
+
+      return response.data.map(item => ({
+        name: item.name,
+        path: item.path,
+        type: item.type, // 'file' or 'dir'
+        size: item.size,
+        downloadUrl: item.download_url,
+        url: item.url
+      }));
+    } catch (error) {
+      console.error('Error fetching repo contents:', error.response?.data || error.message);
+      throw new Error('Failed to fetch repository contents from GitHub');
+    }
+  }
+
+  /**
+   * Validate access token
+   * @param {string} accessToken - GitHub OAuth access token
+   * @returns {Promise<Object>} User info if token is valid
+   */
+  async validateToken(accessToken) {
+    try {
+      const response = await axios.get(`${this.baseURL}/user`, {
+        headers: {
+          'Authorization': `token ${accessToken}`,
+          'Accept': 'application/vnd.github.v3+json',
+          'User-Agent': 'DeployEase-App'
+        }
+      });
+
+      return {
+        id: response.data.id,
+        login: response.data.login,
+        name: response.data.name,
+        email: response.data.email,
+        avatarUrl: response.data.avatar_url
+      };
+    } catch (error) {
+      console.error('Error validating GitHub token:', error.response?.data || error.message);
+      throw new Error('Invalid GitHub access token');
+    }
+  }
+}
+
+module.exports = new GitHubService();
