@@ -3,7 +3,7 @@ const API_BASE_URL = '/api';
 
 // Helper function to make authenticated API requests
 const apiRequest = async (endpoint, options = {}) => {
-  const url = `${API_BASE_URL}${endpoint}`;
+  const url = `${window.location.origin}${API_BASE_URL}${endpoint}`;
   const token = localStorage.getItem('deployease_token');
 
   const config = {

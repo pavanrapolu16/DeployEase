@@ -3,7 +3,7 @@ const API_BASE_URL = '/api/auth';
 
 // Helper function to make API requests
 const apiRequest = async (endpoint, options = {}) => {
-  const url = `${API_BASE_URL}${endpoint}`;
+  const url = `${window.location.origin}${API_BASE_URL}${endpoint}`;
   const config = {
     headers: {
       'Content-Type': 'application/json',
@@ -325,7 +325,7 @@ export const authService = {
   signInWithGoogle: async () => {
     try {
       // Redirect to Google OAuth
-      window.location.href = '/api/oauth/google';
+      window.location.href = `${window.location.origin}/api/oauth/google`;
     } catch (error) {
       throw new Error('Failed to initiate Google authentication');
     }
@@ -334,7 +334,7 @@ export const authService = {
   signInWithGitHub: async () => {
     try {
       // Redirect to GitHub OAuth
-      window.location.href = '/api/oauth/github';
+      window.location.href = `${window.location.origin}/api/oauth/github`;
     } catch (error) {
       throw new Error('Failed to initiate GitHub authentication');
     }
