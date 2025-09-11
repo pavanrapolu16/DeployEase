@@ -6,12 +6,14 @@ import { apiService } from "../../services/apiService";
 const ProjectImportModal = ({ isOpen, onClose, repo }) => {
   const { showSuccess, showError } = useToast();
   const [projectType, setProjectType] = useState('node');
+  const [customDomain, setCustomDomain] = useState('');
   const [loading, setLoading] = useState(false);
 
   // Reset form when modal opens
   useEffect(() => {
     if (isOpen) {
       setProjectType('node');
+      setCustomDomain('');
       setLoading(false);
     }
   }, [isOpen]);
@@ -38,6 +40,23 @@ const ProjectImportModal = ({ isOpen, onClose, repo }) => {
   const handleImport = async () => {
     if (!repo) return;
 
+    // Validate and slugify custom domain if provided
+    let fullCustomDomain = null;
+    if (customDomain.trim()) {
+      let subdomain = customDomain.trim();
+      // Simple slugify: lowercase, replace non-alphanumeric with '-', trim hyphens
+      subdomain = subdomain.toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/^-+|-+$/g, '');
+      if (!subdomain) {
+        showError('Subdomain cannot be empty after processing.');
+        return;
+      }
+      if (!/^[a-z0-9][a-z0-9-]{0,61}[a-z0-9]$/.test(subdomain)) {
+        showError('Subdomain must start and end with alphanumeric, 1-63 characters, letters/numbers/hyphens only.');
+        return;
+      }
+      fullCustomDomain = `${subdomain}.sthara.fun`;
+    }
+
     setLoading(true);
     try {
       // Parse repo URL to extract owner and name
@@ -50,7 +69,8 @@ const ProjectImportModal = ({ isOpen, onClose, repo }) => {
         repositoryUrl: repo.url,
         repositoryName,
         repositoryOwner,
-        projectType
+        projectType,
+        customDomain: fullCustomDomain
       });
 
       const requestData = {
@@ -58,7 +78,8 @@ const ProjectImportModal = ({ isOpen, onClose, repo }) => {
         repositoryUrl: repo.url,
         repositoryName,
         repositoryOwner,
-        projectType
+        projectType,
+        ...(fullCustomDomain && { customDomain: fullCustomDomain })
       };
 
       console.log('Sending request data:', requestData);
@@ -68,7 +89,7 @@ const ProjectImportModal = ({ isOpen, onClose, repo }) => {
       console.log('Full API Response:', response);
       console.log('Response data:', response.data);
 
-      showSuccess(`Imported ${repo.name} successfully!`);
+      showSuccess(`Imported ${repo.name} successfully!${fullCustomDomain ? ` Your site will be at ${fullCustomDomain}` : ''}`);
       onClose();
     } catch (err) {
       console.error('Import error:', err);
@@ -166,6 +187,28 @@ const ProjectImportModal = ({ isOpen, onClose, repo }) => {
                       </label>
                     </div>
                   </div>
+                </div>
+
+                <div className="mb-6">
+                  <label className="block text-sm font-medium text-gray-700 mb-3">
+                    Custom Domain (Optional)
+                  </label>
+                  <div className="relative">
+                    <input
+                      type="text"
+                      value={customDomain}
+                      onChange={(e) => setCustomDomain(e.target.value)}
+                      placeholder="myproject"
+                      className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-primary-500 focus:border-transparent text-sm"
+                      disabled={loading}
+                    />
+                    <span className="absolute right-3 top-1/2 transform -translate-y-1/2 text-gray-500 text-sm pointer-events-none">
+                      .sthara.fun
+                    </span>
+                  </div>
+                  <p className="mt-1 text-xs text-gray-500">
+                    Choose a unique subdomain for your project (e.g., myproject.sthara.fun). Leave empty for auto-assigned.
+                  </p>
                 </div>
               </div>
 
