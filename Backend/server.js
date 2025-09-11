@@ -13,6 +13,9 @@ const passport = require('./config/passport');
 const app = express();
 const PORT = process.env.PORT || 5000;
 
+// Trust the Nginx proxy to get correct protocol (https)
+app.set('trust proxy', 1);
+
 // Middleware
 app.use(cors({
   origin: [
