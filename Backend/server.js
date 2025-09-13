@@ -3,6 +3,7 @@ const cors = require('cors');
 const dotenv = require('dotenv');
 const mongoose = require('mongoose');
 const session = require('express-session');
+const path = require('path');
 
 // Load environment variables FIRST
 dotenv.config();
@@ -46,6 +47,9 @@ app.use(passport.session());
 // Subdomain routing middleware (must be before API routes)
 const subdomainHandler = require('./middleware/subdomain');
 app.use(subdomainHandler);
+
+// Serve static files for root domain (frontend)
+app.use(express.static(path.join(__dirname, '../Frontend/dist')));
 
 // Database connection
 const connectDB = async () => {

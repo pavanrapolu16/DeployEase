@@ -56,30 +56,38 @@ const subdomainHandler = async (req, res, next) => {
     // Get the requested file path
     const requestedPath = req.path === '/' ? '/index.html' : req.path;
     const filePath = path.join(deploymentDir, requestedPath);
-
+    console.log(`[SUBDOMAIN] Request for path: ${req.path}, trying file: ${filePath}`);
+  
     // Check if file exists
     try {
       const stats = await fs.stat(filePath);
+      console.log(`[SUBDOMAIN] File found: ${filePath}, isDirectory: ${stats.isDirectory()}`);
       if (stats.isDirectory()) {
         // If directory, try to serve index.html
         const indexPath = path.join(filePath, 'index.html');
         try {
           await fs.access(indexPath);
+          console.log(`[SUBDOMAIN] Serving directory index: ${indexPath}`);
           res.sendFile(indexPath);
         } catch {
+          console.log(`[SUBDOMAIN] Directory index not found: ${indexPath}`);
           res.status(404).send('File not found');
         }
       } else {
         // Serve the file
+        console.log(`[SUBDOMAIN] Serving file: ${filePath}`);
         res.sendFile(filePath);
       }
     } catch (error) {
+      console.log(`[SUBDOMAIN] File not found: ${filePath}, error: ${error.message}`);
       // File doesn't exist, try to serve index.html for SPA routing
       const indexPath = path.join(deploymentDir, 'index.html');
       try {
         await fs.access(indexPath);
+        console.log(`[SUBDOMAIN] Falling back to SPA index.html for path: ${req.path}`);
         res.sendFile(indexPath);
       } catch {
+        console.log(`[SUBDOMAIN] SPA index.html not found: ${indexPath}`);
         res.status(404).send('File not found');
       }
     }
