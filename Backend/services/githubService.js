@@ -56,17 +56,23 @@ class GitHubService {
    * Get repository details
    * @param {string} owner - Repository owner
    * @param {string} repo - Repository name
-   * @param {string} accessToken - GitHub OAuth access token
+   * @param {string} accessToken - GitHub OAuth access token (optional for public repos)
    * @returns {Promise<Object>} Repository details
    */
-  async getRepoDetails(owner, repo, accessToken) {
+  async getRepoDetails(owner, repo, accessToken = null) {
     try {
+      const headers = {
+        'Accept': 'application/vnd.github.v3+json',
+        'User-Agent': 'DeployEase-App'
+      };
+
+      // Add authorization header only if token is provided
+      if (accessToken) {
+        headers['Authorization'] = `token ${accessToken}`;
+      }
+
       const response = await axios.get(`${this.baseURL}/repos/${owner}/${repo}`, {
-        headers: {
-          'Authorization': `token ${accessToken}`,
-          'Accept': 'application/vnd.github.v3+json',
-          'User-Agent': 'DeployEase-App'
-        }
+        headers
       });
 
       const data = response.data;

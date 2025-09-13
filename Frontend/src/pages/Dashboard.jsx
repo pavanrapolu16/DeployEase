@@ -19,6 +19,12 @@ const Dashboard = () => {
   const [importModalOpen, setImportModalOpen] = useState(false);
   const [selectedRepo, setSelectedRepo] = useState(null);
   const [showSidebar, setShowSidebar] = useState(false);
+  const [searchQuery, setSearchQuery] = useState('');
+  const [searchResults, setSearchResults] = useState([]);
+  const [searching, setSearching] = useState(false);
+  const [showSearchResults, setShowSearchResults] = useState(false);
+  const [importUrl, setImportUrl] = useState('');
+  const [importingUrl, setImportingUrl] = useState(false);
 
   // Check GitHub connection
   useEffect(() => {
@@ -37,13 +43,19 @@ const Dashboard = () => {
 
     if (token) {
       checkGithubConnection();
+    } else {
+      setCheckingGithub(false);
+      setGithubConnected(false);
     }
   }, [token]);
 
   // Fetch GitHub repositories
   useEffect(() => {
     const fetchRepos = async () => {
-      if (!githubConnected) return;
+      if (!githubConnected) {
+        setLoading(false);
+        return;
+      }
 
       try {
         setLoading(true);
@@ -59,8 +71,11 @@ const Dashboard = () => {
 
     if (token && githubConnected) {
       fetchRepos();
+    } else if (token && !checkingGithub) {
+      // If we have token but GitHub is not connected, still set loading to false
+      setLoading(false);
     }
-  }, [token, githubConnected]);
+  }, [token, githubConnected, checkingGithub]);
 
   // Fetch user's projects
   useEffect(() => {
@@ -70,7 +85,8 @@ const Dashboard = () => {
       try {
         setProjectsLoading(true);
         const response = await apiService.get('/projects');
-        setProjects(response.data.data?.projects || []);
+        const projectsData = response.data?.projects || [];
+        setProjects(projectsData);
       } catch (err) {
         console.error('Error fetching projects:', err);
         showError('Failed to load projects');
@@ -113,7 +129,7 @@ const Dashboard = () => {
         try {
           setProjectsLoading(true);
           const response = await apiService.get('/projects');
-          setProjects(response.data.data?.projects || []);
+          setProjects(response.data?.projects || []);
         } catch (err) {
           console.error('Error fetching projects:', err);
         } finally {
@@ -131,10 +147,83 @@ const Dashboard = () => {
       showSuccess('Deployment started successfully!');
       // Refresh projects to show updated status
       const response = await apiService.get('/projects');
-      setProjects(response.data.data?.projects || []);
+      setProjects(response.data?.projects || []);
     } catch (err) {
       console.error('Error deploying project:', err);
       showError('Failed to start deployment');
+    }
+  };
+
+  // Search repositories handler
+  const handleSearch = async (e) => {
+    e.preventDefault();
+    if (!searchQuery.trim()) return;
+
+    try {
+      setSearching(true);
+      setShowSearchResults(true);
+      const results = await githubService.searchRepos(searchQuery.trim());
+      setSearchResults(results || []);
+    } catch (err) {
+      console.error('Error searching repos:', err);
+      showError('Failed to search repositories');
+      setSearchResults([]);
+    } finally {
+      setSearching(false);
+    }
+  };
+
+  // Clear search
+  const handleClearSearch = () => {
+    setSearchQuery('');
+    setSearchResults([]);
+    setShowSearchResults(false);
+  };
+
+  // Import by URL handler
+  const handleImportByUrl = async (e) => {
+    e.preventDefault();
+    if (!importUrl.trim()) return;
+
+    // Parse GitHub URL
+    const urlPattern = /^https?:\/\/(www\.)?github\.com\/([^\/]+)\/([^\/]+)(?:\/.*)?$/i;
+    const match = importUrl.trim().match(urlPattern);
+
+    if (!match) {
+      showError('Invalid GitHub URL. Please use format: https://github.com/owner/repo');
+      return;
+    }
+
+    const [, , owner, repo] = match;
+
+    try {
+      setImportingUrl(true);
+
+      // Get repo details from GitHub API
+      const repoDetails = await githubService.getRepoDetails(owner, repo);
+
+      // Create repo object for import modal
+      const repoObject = {
+        id: repoDetails.id,
+        name: repoDetails.name,
+        fullName: repoDetails.fullName,
+        description: repoDetails.description,
+        url: repoDetails.url,
+        language: repoDetails.language,
+        stars: repoDetails.stars,
+        isPrivate: repoDetails.isPrivate
+      };
+
+      // Open import modal with this repo
+      setSelectedRepo(repoObject);
+      setImportModalOpen(true);
+      setImportUrl(''); // Clear the URL input
+
+    } catch (err) {
+      console.error('Error fetching repo details:', err);
+      showError('Failed to fetch repository details. Please check the URL and try again.');
+    } finally {
+      setImportingUrl(false);
     }
   };
 
@@ -286,6 +375,37 @@ const Dashboard = () => {
               <FaGithub className="text-primary-600" />
               <span>Your Repositories</span>
             </h3>
+
+            {/* Import by URL */}
+            <div className="mb-6">
+              <form onSubmit={handleImportByUrl} className="flex gap-2">
+                <div className="flex-1 relative">
+                  <input
+                    type="url"
+                    value={importUrl}
+                    onChange={(e) => setImportUrl(e.target.value)}
+                    placeholder="https://github.com/owner/repository"
+                    className="w-full px-4 py-3 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-primary-500 focus:border-transparent text-sm"
+                    disabled={importingUrl}
+                  />
+                </div>
+                <button
+                  type="submit"
+                  disabled={importingUrl || !importUrl.trim()}
+                  className="px-6 py-3 bg-primary-600 text-white rounded-lg hover:bg-primary-700 transition-colors font-medium disabled:opacity-50 disabled:cursor-not-allowed flex items-center space-x-2"
+                >
+                  {importingUrl ? (
+                    <div className="w-4 h-4 border-2 border-white border-t-transparent rounded-full animate-spin"></div>
+                  ) : (
+                    <FaGithub size={16} />
+                  )}
+                  <span>{importingUrl ? 'Loading...' : 'Import'}</span>
+                </button>
+              </form>
+              <p className="mt-2 text-xs text-gray-500">
+                Paste any public GitHub repository URL to import and deploy
+              </p>
+            </div>
             {checkingGithub ? (
               <div className="flex justify-center items-center h-32">
                 <div className="text-gray-500 animate-pulse">Checking GitHub connection...</div>

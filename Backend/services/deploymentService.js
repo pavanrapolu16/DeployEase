@@ -30,7 +30,7 @@ class DeploymentService {
     }
 
     const project = deployment.project;
-    const deploymentDir = path.join(this.deploymentsDir, deploymentId);
+    const deploymentDir = path.join(this.deploymentsDir, deploymentId.toString());
 
     try {
       // Update status to building

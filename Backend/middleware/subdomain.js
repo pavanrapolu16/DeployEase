@@ -40,7 +40,43 @@ const subdomainHandler = async (req, res, next) => {
     }).populate('lastDeployment');
 
     if (!project || !project.lastDeployment) {
-      return res.status(404).send('Project not found');
+      // Serve custom 404 page for non-existent subdomains
+      const notFoundPath = path.join(__dirname, '../public/subdomain-404.html');
+      try {
+        await fs.access(notFoundPath);
+        return res.status(404).sendFile(notFoundPath);
+      } catch {
+        // Fallback to basic message if custom page doesn't exist
+        return res.status(404).send(`
+          <!DOCTYPE html>
+          <html lang="en">
+          <head>
+            <meta charset="UTF-8">
+            <meta name="viewport" content="width=device-width, initial-scale=1.0">
+            <title>Project Not Found - DeployEase</title>
+            <style>
+              body { font-family: 'Inter', sans-serif; background: linear-gradient(135deg, #667eea 0%, #764ba2 100%); min-height: 100vh; display: flex; align-items: center; justify-content: center; color: #333; margin: 0; }
+              .container { background: white; border-radius: 20px; padding: 60px 40px; box-shadow: 0 20px 60px rgba(0,0,0,0.15); text-align: center; max-width: 500px; width: 90%; }
+              .icon { font-size: 4rem; margin-bottom: 20px; opacity: 0.8; }
+              h1 { font-size: 2.5rem; font-weight: 700; color: #2d3748; margin-bottom: 16px; background: linear-gradient(135deg, #667eea, #764ba2); -webkit-background-clip: text; -webkit-text-fill-color: transparent; background-clip: text; }
+              .subtitle { font-size: 1.1rem; color: #718096; margin-bottom: 12px; font-weight: 500; }
+              .message { font-size: 1rem; color: #a0aec0; margin-bottom: 40px; line-height: 1.6; }
+              .btn { display: inline-block; padding: 16px 32px; background: linear-gradient(135deg, #667eea, #764ba2); color: white; text-decoration: none; border-radius: 12px; font-weight: 600; font-size: 1rem; transition: all 0.3s ease; box-shadow: 0 4px 15px rgba(102,126,234,0.4); }
+              .btn:hover { transform: translateY(-2px); box-shadow: 0 8px 25px rgba(102,126,234,0.6); color: white; }
+            </style>
+          </head>
+          <body>
+            <div class="container">
+              <div class="icon">🚀</div>
+              <h1>Project Not Found</h1>
+              <div class="subtitle">This subdomain doesn't have a deployed project yet</div>
+              <p class="message">There is no project running on this server. If you want to deploy your project, sign up for DeployEase and start building!</p>
+              <a href="https://sthara.fun" class="btn">🚀 Start Deploying Now</a>
+            </div>
+          </body>
+          </html>
+        `);
+      }
     }
 
     // Get the deployment directory

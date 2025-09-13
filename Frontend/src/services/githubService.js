@@ -23,6 +23,21 @@ export const githubService = {
     }
   },
 
+  // Search public repositories
+  searchRepos: async (query, page = 1, perPage = 10) => {
+    try {
+      const response = await apiService.get('/github/search/repos', {
+        q: query,
+        page,
+        per_page: perPage
+      });
+      return response.data.repositories;
+    } catch (error) {
+      console.error('Error searching repos:', error);
+      throw new Error(error.message || 'Failed to search repositories');
+    }
+  },
+
   // Get GitHub user info
   getUserInfo: async () => {
     try {

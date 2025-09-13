@@ -1,4 +1,5 @@
 const express = require('express');
+const axios = require('axios');
 const { authenticateToken } = require('../middleware/auth');
 const User = require('../models/User');
 const githubService = require('../services/githubService');
@@ -65,28 +66,30 @@ router.get('/repos', authenticateToken, async (req, res) => {
 
 // @route   GET /api/github/repos/:owner/:repo
 // @desc    Get repository details
-// @access  Private
-router.get('/repos/:owner/:repo', authenticateToken, async (req, res) => {
+// @access  Public for public repos, Private for private repos
+router.get('/repos/:owner/:repo', async (req, res) => {
   try {
     const { owner, repo } = req.params;
 
-    const user = await User.findById(req.user._id);
+    let accessToken = null;
 
-    if (!user) {
-      return res.status(404).json({
-        success: false,
-        message: 'User not found'
-      });
+    // If user is authenticated and has token, use it (for private repos)
+    if (req.user && req.user._id) {
+      const user = await User.findById(req.user._id);
+      if (user && user.accessToken) {
+        accessToken = user.accessToken;
+      }
     }
 
-    if (!user.accessToken) {
-      return res.status(400).json({
+    const repoDetails = await githubService.getRepoDetails(owner, repo, accessToken);
+
+    // Check if repo is private and user doesn't have access
+    if (repoDetails.isPrivate && !accessToken) {
+      return res.status(403).json({
         success: false,
-        message: 'GitHub access token not found. Please reconnect your GitHub account.'
+        message: 'This is a private repository. Please connect your GitHub account to access it.'
       });
     }
-
-    const repoDetails = await githubService.getRepoDetails(owner, repo, user.accessToken);
 
     res.json({
       success: true,
@@ -191,19 +194,87 @@ router.get('/repos/:owner/:repo/contents', authenticateToken, async (req, res) =
   }
 });
 
+// @route   GET /api/github/search/repos
+// @desc    Search public GitHub repositories
+// @access  Public
+router.get('/search/repos', async (req, res) => {
+  try {
+    const query = req.query.q;
+    const page = parseInt(req.query.page) || 1;
+    const perPage = parseInt(req.query.per_page) || 10;
+
+    if (!query || query.trim().length < 2) {
+      return res.status(400).json({
+        success: false,
+        message: 'Search query must be at least 2 characters long'
+      });
+    }
+
+    // Use GitHub search API
+    const response = await axios.get(`${githubService.baseURL}/search/repositories`, {
+      params: {
+        q: query.trim(),
+        page,
+        per_page: Math.min(perPage, 30), // GitHub search API limit
+        sort: 'stars',
+        order: 'desc'
+      },
+      headers: {
+        'Accept': 'application/vnd.github.v3+json',
+        'User-Agent': 'DeployEase-App'
+      }
+    });
+
+    const repos = response.data.items.map(repo => ({
+      id: repo.id,
+      name: repo.name,
+      fullName: repo.full_name,
+      description: repo.description,
+      url: repo.html_url,
+      cloneUrl: repo.clone_url,
+      sshUrl: repo.ssh_url,
+      language: repo.language,
+      stars: repo.stargazers_count,
+      forks: repo.forks_count,
+      isPrivate: repo.private,
+      isFork: repo.fork,
+      createdAt: repo.created_at,
+      updatedAt: repo.updated_at,
+      defaultBranch: repo.default_branch,
+      topics: repo.topics || []
+    }));
+
+    res.json({
+      success: true,
+      message: 'Repositories searched successfully',
+      data: {
+        repositories: repos,
+        totalCount: response.data.total_count,
+        pagination: {
+          page,
+          perPage,
+          hasMore: response.data.total_count > page * perPage
+        }
+      }
+    });
+  } catch (error) {
+    console.error('Error searching GitHub repos:', error);
+    res.status(500).json({
+      success: false,
+      message: 'Failed to search repositories from GitHub',
+      error: process.env.NODE_ENV === 'development' ? error.message : undefined
+    });
+  }
+});
+
 // @route   GET /api/github/user
 // @desc    Get GitHub user info
 // @access  Private
 router.get('/user', authenticateToken, async (req, res) => {
   try {
-    console.log('GitHub user route - req.user:', req.user);
-    console.log('GitHub user route - userId:', req.user._id);
-
     const user = await User.findById(req.user._id);
-    console.log('GitHub user route - found user:', !!user);
 
     if (!user) {
-      console.log('GitHub user route - user not found in database');
       return res.status(404).json({
         success: false,
         message: 'User not found'
