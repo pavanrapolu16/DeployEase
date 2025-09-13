@@ -56,12 +56,27 @@ class DeploymentService {
 
       // Deploy files
       const deployedUrl = await this.deployFiles(project, deploymentDir, deployment);
-
+    
+      // Copy built files to deployment root if not static
+      if (project.projectType !== 'static') {
+        const outputDir = project.outputDir || 'dist';
+        const sourceDir = path.join(deploymentDir, outputDir);
+        const targetDir = deploymentDir;
+    
+        try {
+          await this.copyDirectory(sourceDir, targetDir);
+          await deployment.addLog('info', `Copied built files from ${outputDir} to deployment root`);
+        } catch (error) {
+          await deployment.addLog('error', `Failed to copy built files: ${error.message}`);
+          throw error;
+        }
+      }
+    
       // Update deployment as successful
       deployment.deployedUrl = deployedUrl;
       await deployment.updateStatus('success');
       await deployment.addLog('info', `Deployment completed successfully. Site available at: ${deployedUrl}`);
-
+    
       // Update project's last deployment
       project.lastDeployment = deployment._id;
       await project.save();
@@ -203,32 +218,34 @@ class DeploymentService {
     return deployment.buildLogs;
   }
 
-  /**
-   * Cleanup old deployments
-   */
-  async cleanupOldDeployments() {
-    try {
-      const cutoffDate = new Date();
-      cutoffDate.setDate(cutoffDate.getDate() - 30); // Keep deployments for 30 days
+ /**
+  * Cleanup old deployments
+  */
+ async cleanupOldDeployments() {
+   try {
+     const cutoffDate = new Date();
+     cutoffDate.setDate(cutoffDate.getDate() - 30); // Keep deployments for 30 days
 
-      const oldDeployments = await Deployment.find({
-        status: 'success',
-        createdAt: { $lt: cutoffDate }
-      }).select('_id');
+     const oldDeployments = await Deployment.find({
+       status: 'success',
+       createdAt: { $lt: cutoffDate }
+     }).select('_id');
 
-      for (const deployment of oldDeployments) {
-        const deploymentDir = path.join(this.deploymentsDir, deployment._id.toString());
-        try {
-          await fs.rm(deploymentDir, { recursive: true, force: true });
-          console.log(`Cleaned up deployment: ${deployment._id}`);
-        } catch (error) {
-          console.error(`Failed to cleanup deployment ${deployment._id}:`, error);
-        }
-      }
-    } catch (error) {
-      console.error('Error during cleanup:', error);
-    }
-  }
+     for (const deployment of oldDeployments) {
+       const deploymentDir = path.join(this.deploymentsDir, deployment._id.toString());
+       try {
+         await fs.rm(deploymentDir, { recursive: true, force: true });
+         console.log(`Cleaned up deployment: ${deployment._id}`);
+       } catch (error) {
+         console.error(`Failed to cleanup deployment ${deployment._id}:`, error);
+       }
+     }
+   } catch (error) {
+     console.error('Error during cleanup:', error);
+   }
+ }
+
 }
+
 
 module.exports = new DeploymentService();
