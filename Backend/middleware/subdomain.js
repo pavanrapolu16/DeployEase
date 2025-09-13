@@ -11,6 +11,7 @@ const subdomainHandler = async (req, res, next) => {
   try {
     const host = req.headers.host;
     const baseDomain = process.env.BASE_DOMAIN || 'deployease.in';
+    console.log(`[SUBDOMAIN] Middleware triggered for host: ${host}`);
 
     // Skip if no host header or if it's the main domain
     if (!host) {
@@ -27,25 +28,38 @@ const subdomainHandler = async (req, res, next) => {
 
     // Extract subdomain
     const subdomain = hostname.replace(`.${baseDomain}`, '');
+    console.log(`[SUBDOMAIN] Host: ${host}, Base domain: ${baseDomain}, Extracted subdomain: ${subdomain}`);
 
     // Skip if subdomain is empty or contains dots (invalid)
     if (!subdomain || subdomain.includes('.')) {
+      console.log(`[SUBDOMAIN] Skipping - invalid subdomain: ${subdomain}`);
       return next();
     }
 
     // Find project by subdomain (project name)
+    console.log(`[SUBDOMAIN] Looking for project with name: ${subdomain}`);
     const project = await Project.findOne({
       name: subdomain,
       status: 'active'
     }).populate('lastDeployment');
 
+    console.log(`[SUBDOMAIN] Found project:`, project ? {
+      id: project._id,
+      name: project.name,
+      hasLastDeployment: !!project.lastDeployment
+    } : 'null');
+
     if (!project || !project.lastDeployment) {
+      console.log(`[SUBDOMAIN] Project not found or no deployment for subdomain: ${subdomain}`);
       // Serve custom 404 page for non-existent subdomains
       const notFoundPath = path.join(__dirname, '../public/subdomain-404.html');
+      console.log(`[SUBDOMAIN] Looking for 404 page at: ${notFoundPath}`);
       try {
         await fs.access(notFoundPath);
+        console.log(`[SUBDOMAIN] Serving custom 404 page`);
         return res.status(404).sendFile(notFoundPath);
-      } catch {
+      } catch (error) {
+        console.log(`[SUBDOMAIN] Custom 404 page not found: ${error.message}`);
         // Fallback to basic message if custom page doesn't exist
         return res.status(404).send(`
           <!DOCTYPE html>
