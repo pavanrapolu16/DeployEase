@@ -79,15 +79,20 @@ app.use('/api/github', require('./routes/github'));
 app.use('/api/projects', require('./routes/projects'));
 app.use('/api/deployments', require('./routes/deployments'));
 
+// Catch-all handler for client-side routing (serve index.html for non-API routes)
+app.get('*', (req, res) => {
+  res.sendFile(path.join(__dirname, '../Frontend/dist/index.html'));
+});
+
 // Error handling middleware
 app.use((err, req, res, next) => {
   console.error(err.stack);
   res.status(500).json({ message: 'Something went wrong!' });
 });
 
-// 404 handler
-app.use((req, res) => {
-  res.status(404).json({ message: 'Route not found' });
+// 404 handler for API routes
+app.use('/api/*', (req, res) => {
+  res.status(404).json({ message: 'API route not found' });
 });
 
 // Start server
