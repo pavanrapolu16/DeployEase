@@ -10,7 +10,7 @@ const fs = require('fs').promises;
 const subdomainHandler = async (req, res, next) => {
   try {
     const host = req.headers.host;
-    const baseDomain = process.env.BASE_DOMAIN || 'deployease.in';
+    const baseDomain = process.env.BASE_DOMAIN || 'sthara.fun';
     console.log(`[SUBDOMAIN] Middleware triggered for host: ${host}`);
 
     // Skip if no host header or if it's the main domain
@@ -57,45 +57,27 @@ const subdomainHandler = async (req, res, next) => {
         return next();
       }
 
-      // Find project by subdomain (project name)
-      // Handle edge cases from deployment normalization
-      console.log(`[SUBDOMAIN] Looking for project with name: ${subdomain}`);
+      // Find project by subdomain
+      console.log(`[SUBDOMAIN] Looking for project with subdomain: ${subdomain}`);
 
-      // Try multiple variations to handle normalization edge cases
-      const searchVariations = [
-        subdomain,  // exact match
-        subdomain.replace(/-/g, '_'),  // hyphens to underscores
-        subdomain.replace(/_/g, '-'),  // underscores to hyphens (reverse)
-        subdomain.replace(/--+/g, '-'),  // multiple hyphens to single
-        subdomain.replace(/^[-]+|[-]+$/g, ''),  // remove leading/trailing hyphens
-      ];
+      // Search by exact subdomain match
+      project = await Project.findOne({
+        subdomain: subdomain,
+        status: 'active'
+      }).populate('lastDeployment');
 
-      // Remove duplicates
-      const uniqueVariations = [...new Set(searchVariations.filter(v => v.length > 0))];
-
-      for (const variation of uniqueVariations) {
-        console.log(`[SUBDOMAIN] Trying variation: "${variation}"`);
-
-        // Try exact match
+      if (project) {
+        console.log(`[SUBDOMAIN] Found project with subdomain: "${subdomain}"`);
+      } else {
+        // Fallback: search by name for backward compatibility with existing projects
+        console.log(`[SUBDOMAIN] Subdomain not found, trying name match: ${subdomain}`);
         project = await Project.findOne({
-          name: variation,
+          name: subdomain,
           status: 'active'
         }).populate('lastDeployment');
 
         if (project) {
-          console.log(`[SUBDOMAIN] Found with exact match: "${variation}"`);
-          break;
-        }
-
-        // Try case-insensitive match
-        project = await Project.findOne({
-          name: { $regex: new RegExp(`^${variation}$`, 'i') },
-          status: 'active'
-        }).populate('lastDeployment');
-
-        if (project) {
-          console.log(`[SUBDOMAIN] Found with case-insensitive match: "${variation}"`);
-          break;
+          console.log(`[SUBDOMAIN] Found project with name: "${subdomain}"`);
         }
       }
     }

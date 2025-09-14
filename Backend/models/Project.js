@@ -57,6 +57,11 @@ const projectSchema = new mongoose.Schema({
     trim: true,
     lowercase: true
   },
+  subdomain: {
+    type: String,
+    trim: true,
+    lowercase: true
+  },
   status: {
     type: String,
     enum: ['active', 'inactive'],
@@ -76,6 +81,10 @@ projectSchema.index({ repositoryUrl: 1 });
 projectSchema.index({ customDomain: 1 }, {
   unique: true,
   partialFilterExpression: { customDomain: { $exists: true } }
+});
+projectSchema.index({ subdomain: 1 }, {
+  unique: true,
+  partialFilterExpression: { subdomain: { $exists: true } }
 });
 
 // Instance method to get project info

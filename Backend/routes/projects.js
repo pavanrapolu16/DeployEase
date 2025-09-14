@@ -44,30 +44,33 @@ router.post('/', authenticateToken, async (req, res) => {
     }
 
     // Validate project name for subdomain compatibility
-    const normalizedName = name.toLowerCase().replace(/[^a-z0-9-]/g, '-').replace(/--+/g, '-').replace(/^[-]+|[-]+$/g, '');
-    if (!normalizedName || normalizedName.length === 0) {
+    const baseNormalized = name.toLowerCase().replace(/[^a-z0-9-]/g, '-').replace(/--+/g, '-').replace(/^[-]+|[-]+$/g, '');
+    if (!baseNormalized || baseNormalized.length === 0) {
       return res.status(400).json({
         success: false,
         message: 'Project name results in invalid subdomain. Please use a name with alphanumeric characters.'
       });
     }
+
+    // Include repository owner in normalized name for uniqueness
+    const normalizedName = `${baseNormalized}-${repositoryOwner.toLowerCase()}`;
     if (normalizedName.length > 63) {
       return res.status(400).json({
         success: false,
-        message: 'Project name is too long. Subdomain cannot exceed 63 characters.'
+        message: 'Project name combined with owner is too long. Subdomain cannot exceed 63 characters.'
       });
     }
 
     // Check if normalized name conflicts with existing projects
     const existingNormalized = await Project.findOne({
-      name: { $regex: new RegExp(`^${normalizedName}$`, 'i') },
+      subdomain: normalizedName,
       status: 'active'
     });
 
     if (existingNormalized) {
       return res.status(400).json({
         success: false,
-        message: 'A project with a similar name already exists that would create the same subdomain.'
+        message: 'A project with a similar name and owner already exists that would create the same subdomain.'
       });
     }
 
@@ -98,6 +101,7 @@ router.post('/', authenticateToken, async (req, res) => {
       buildCommand: buildCommand || 'npm run build',
       outputDir: outputDir || 'dist',
       customDomain: customDomain ? customDomain.toLowerCase() : undefined,
+      subdomain: normalizedName,
       projectType: projectType || 'node'
     });
 
@@ -216,23 +220,26 @@ router.put('/:id', authenticateToken, async (req, res) => {
     // Update project fields
     if (name) {
       // Validate new name for subdomain compatibility
-      const normalizedName = name.toLowerCase().replace(/[^a-z0-9-]/g, '-').replace(/--+/g, '-').replace(/^[-]+|[-]+$/g, '');
-      if (!normalizedName || normalizedName.length === 0) {
+      const baseNormalized = name.toLowerCase().replace(/[^a-z0-9-]/g, '-').replace(/--+/g, '-').replace(/^[-]+|[-]+$/g, '');
+      if (!baseNormalized || baseNormalized.length === 0) {
         return res.status(400).json({
           success: false,
           message: 'Project name results in invalid subdomain. Please use a name with alphanumeric characters.'
         });
       }
+
+      // Include repository owner in normalized name for uniqueness
+      const normalizedName = `${baseNormalized}-${project.repositoryOwner.toLowerCase()}`;
       if (normalizedName.length > 63) {
         return res.status(400).json({
           success: false,
-          message: 'Project name is too long. Subdomain cannot exceed 63 characters.'
+          message: 'Project name combined with owner is too long. Subdomain cannot exceed 63 characters.'
         });
       }
 
       // Check if normalized name conflicts with other projects
       const existingNormalized = await Project.findOne({
-        name: { $regex: new RegExp(`^${normalizedName}$`, 'i') },
+        subdomain: normalizedName,
         status: 'active',
         _id: { $ne: req.params.id }
       });
@@ -240,11 +247,12 @@ router.put('/:id', authenticateToken, async (req, res) => {
       if (existingNormalized) {
         return res.status(400).json({
           success: false,
-          message: 'A project with a similar name already exists that would create the same subdomain.'
+          message: 'A project with a similar name and owner already exists that would create the same subdomain.'
         });
       }
 
       project.name = name;
+      project.subdomain = normalizedName;
     }
     if (description !== undefined) project.description = description;
     if (branch) project.branch = branch;
