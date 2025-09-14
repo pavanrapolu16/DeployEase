@@ -25,6 +25,8 @@ const Dashboard = () => {
   const [showSearchResults, setShowSearchResults] = useState(false);
   const [importUrl, setImportUrl] = useState('');
   const [importingUrl, setImportingUrl] = useState(false);
+  const [deploymentPolling, setDeploymentPolling] = useState({});
+  const [pollingIntervals, setPollingIntervals] = useState({});
 
   // Check GitHub connection
   useEffect(() => {
@@ -87,6 +89,15 @@ const Dashboard = () => {
         const response = await apiService.get('/projects');
         const projectsData = response.data?.projects || [];
         setProjects(projectsData);
+
+        // Check for projects with ongoing deployments and start polling
+        projectsData.forEach(project => {
+          if (project.lastDeployment &&
+              (project.lastDeployment.status === 'pending' || project.lastDeployment.status === 'building')) {
+            setDeploymentPolling(prev => ({ ...prev, [project._id]: true }));
+            pollDeploymentStatus(project._id, project.lastDeployment._id);
+          }
+        });
       } catch (err) {
         console.error('Error fetching projects:', err);
         showError('Failed to load projects');
@@ -99,6 +110,15 @@ const Dashboard = () => {
       fetchProjects();
     }
   }, [token]);
+
+  // Cleanup polling intervals on unmount
+  useEffect(() => {
+    return () => {
+      Object.values(pollingIntervals).forEach(interval => {
+        if (interval) clearInterval(interval);
+      });
+    };
+  }, [pollingIntervals]);
 
   // Connect GitHub handler
   const handleConnectGithub = () => {
@@ -129,7 +149,17 @@ const Dashboard = () => {
         try {
           setProjectsLoading(true);
           const response = await apiService.get('/projects');
-          setProjects(response.data?.projects || []);
+          const projectsData = response.data?.projects || [];
+          setProjects(projectsData);
+
+          // Check for projects with ongoing deployments and start polling
+          projectsData.forEach(project => {
+            if (project.lastDeployment &&
+                (project.lastDeployment.status === 'pending' || project.lastDeployment.status === 'building')) {
+              setDeploymentPolling(prev => ({ ...prev, [project._id]: true }));
+              pollDeploymentStatus(project._id, project.lastDeployment._id);
+            }
+          });
         } catch (err) {
           console.error('Error fetching projects:', err);
         } finally {
@@ -140,14 +170,84 @@ const Dashboard = () => {
     }
   };
 
+  // Poll deployment status
+  const pollDeploymentStatus = async (projectId, deploymentId) => {
+    // Clear any existing interval for this project
+    if (pollingIntervals[projectId]) {
+      clearInterval(pollingIntervals[projectId]);
+    }
+
+    const pollInterval = setInterval(async () => {
+      try {
+        const response = await apiService.get('/projects');
+        const projectsData = response.data?.projects || [];
+        setProjects(projectsData);
+
+        // Find the project and check deployment status
+        const project = projectsData.find(p => p._id === projectId);
+        if (project && project.lastDeployment) {
+          const deployment = project.lastDeployment;
+          if (deployment.status === 'success' || deployment.status === 'failed') {
+            // Deployment completed
+            clearInterval(pollInterval);
+            setPollingIntervals(prev => {
+              const newIntervals = { ...prev };
+              delete newIntervals[projectId];
+              return newIntervals;
+            });
+            setDeploymentPolling(prev => ({ ...prev, [projectId]: false }));
+
+            if (deployment.status === 'success') {
+              showSuccess('Deployment completed successfully!');
+            } else {
+              showError('Deployment failed. Please check the logs.');
+            }
+          }
+        }
+      } catch (error) {
+        console.error('Error polling deployment status:', error);
+        clearInterval(pollInterval);
+        setPollingIntervals(prev => {
+          const newIntervals = { ...prev };
+          delete newIntervals[projectId];
+          return newIntervals;
+        });
+        setDeploymentPolling(prev => ({ ...prev, [projectId]: false }));
+      }
+    }, 3000); // Poll every 3 seconds
+
+    // Store the interval ID
+    setPollingIntervals(prev => ({ ...prev, [projectId]: pollInterval }));
+
+    // Stop polling after 5 minutes to prevent infinite polling
+    setTimeout(() => {
+      clearInterval(pollInterval);
+      setPollingIntervals(prev => {
+        const newIntervals = { ...prev };
+        delete newIntervals[projectId];
+        return newIntervals;
+      });
+      setDeploymentPolling(prev => ({ ...prev, [projectId]: false }));
+    }, 300000); // 5 minutes
+  };
+
   // Deploy project handler
   const handleDeployProject = async (projectId) => {
     try {
-      await apiService.post(`/projects/${projectId}/deploy`);
+      const response = await apiService.post(`/projects/${projectId}/deploy`);
+      const deployment = response.data?.deployment;
+
       showSuccess('Deployment started successfully!');
-      // Refresh projects to show updated status
-      const response = await apiService.get('/projects');
-      setProjects(response.data?.projects || []);
+
+      if (deployment) {
+        // Start polling for deployment status
+        setDeploymentPolling(prev => ({ ...prev, [projectId]: true }));
+        pollDeploymentStatus(projectId, deployment._id);
+      } else {
+        // Fallback: refresh immediately if no deployment returned
+        const projectsResponse = await apiService.get('/projects');
+        setProjects(projectsResponse.data?.projects || []);
+      }
     } catch (err) {
       console.error('Error deploying project:', err);
       showError('Failed to start deployment');
@@ -574,10 +674,20 @@ const Dashboard = () => {
                           </div>
                           <button
                             onClick={() => handleDeployProject(project._id)}
-                            className="w-full mt-3 bg-primary-600 hover:bg-primary-700 text-white py-2 px-4 rounded-lg font-semibold transition-colors flex items-center justify-center space-x-2 shadow-medium hover:shadow-glow"
+                            disabled={deploymentPolling[project._id]}
+                            className="w-full mt-3 bg-primary-600 hover:bg-primary-700 text-white py-2 px-4 rounded-lg font-semibold transition-colors flex items-center justify-center space-x-2 shadow-medium hover:shadow-glow disabled:opacity-50 disabled:cursor-not-allowed"
                           >
-                            <FaRocket />
-                            <span>Deploy Now</span>
+                            {deploymentPolling[project._id] ? (
+                              <>
+                                <div className="w-4 h-4 border-2 border-white border-t-transparent rounded-full animate-spin"></div>
+                                <span>Deploying...</span>
+                              </>
+                            ) : (
+                              <>
+                                <FaRocket />
+                                <span>Deploy Now</span>
+                              </>
+                            )}
                           </button>
                         </div>
                       ) : (

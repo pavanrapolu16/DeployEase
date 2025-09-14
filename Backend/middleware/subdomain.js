@@ -100,48 +100,6 @@ const subdomainHandler = async (req, res, next) => {
       }
     }
 
-    // Find project by subdomain (project name)
-    // Handle edge cases from deployment normalization
-    console.log(`[SUBDOMAIN] Looking for project with name: ${subdomain}`);
-    project = null;
-
-    // Try multiple variations to handle normalization edge cases
-    const searchVariations = [
-      subdomain,  // exact match
-      subdomain.replace(/-/g, '_'),  // hyphens to underscores
-      subdomain.replace(/_/g, '-'),  // underscores to hyphens (reverse)
-      subdomain.replace(/--+/g, '-'),  // multiple hyphens to single
-      subdomain.replace(/^[-]+|[-]+$/g, ''),  // remove leading/trailing hyphens
-    ];
-
-    // Remove duplicates
-    const uniqueVariations = [...new Set(searchVariations.filter(v => v.length > 0))];
-
-    for (const variation of uniqueVariations) {
-      console.log(`[SUBDOMAIN] Trying variation: "${variation}"`);
-
-      // Try exact match
-      project = await Project.findOne({
-        name: variation,
-        status: 'active'
-      }).populate('lastDeployment');
-
-      if (project) {
-        console.log(`[SUBDOMAIN] Found with exact match: "${variation}"`);
-        break;
-      }
-
-      // Try case-insensitive match
-      project = await Project.findOne({
-        name: { $regex: new RegExp(`^${variation}$`, 'i') },
-        status: 'active'
-      }).populate('lastDeployment');
-
-      if (project) {
-        console.log(`[SUBDOMAIN] Found with case-insensitive match: "${variation}"`);
-        break;
-      }
-    }
 
     console.log(`[SUBDOMAIN] Found project:`, project ? {
       id: project._id,
@@ -150,7 +108,7 @@ const subdomainHandler = async (req, res, next) => {
     } : 'null');
 
     if (!project || !project.lastDeployment) {
-      console.log(`[SUBDOMAIN] Project not found or no deployment for subdomain: ${subdomain}`);
+      console.log(`[SUBDOMAIN] Project not found or no deployment for: ${hostname}`);
       // Serve custom 404 page for non-existent subdomains
       const notFoundPath = path.join(__dirname, '../public/subdomain-404.html');
       console.log(`[SUBDOMAIN] Looking for 404 page at: ${notFoundPath}`);
