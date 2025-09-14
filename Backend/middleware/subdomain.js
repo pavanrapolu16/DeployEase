@@ -26,22 +26,122 @@ const subdomainHandler = async (req, res, next) => {
       return next();
     }
 
-    // Extract subdomain
-    const subdomain = hostname.replace(`.${baseDomain}`, '');
-    console.log(`[SUBDOMAIN] Host: ${host}, Base domain: ${baseDomain}, Extracted subdomain: ${subdomain}`);
+    // First, check if this is a custom domain
+    console.log(`[SUBDOMAIN] Checking for custom domain: ${hostname}`);
+    let project = await Project.findOne({
+      customDomain: hostname,
+      status: 'active'
+    }).populate('lastDeployment');
 
-    // Skip if subdomain is empty or contains dots (invalid)
-    if (!subdomain || subdomain.includes('.')) {
-      console.log(`[SUBDOMAIN] Skipping - invalid subdomain: ${subdomain}`);
-      return next();
+    if (project) {
+      console.log(`[SUBDOMAIN] Found custom domain project:`, {
+        id: project._id,
+        name: project.name,
+        customDomain: project.customDomain,
+        hasLastDeployment: !!project.lastDeployment
+      });
+    } else {
+      // Check if this is a base domain subdomain
+      if (!hostname.endsWith(`.${baseDomain}`)) {
+        console.log(`[SUBDOMAIN] Host doesn't match base domain or custom domain: ${hostname}`);
+        return next();
+      }
+
+      // Extract subdomain
+      const subdomain = hostname.replace(`.${baseDomain}`, '');
+      console.log(`[SUBDOMAIN] Host: ${host}, Base domain: ${baseDomain}, Extracted subdomain: ${subdomain}`);
+
+      // Skip if subdomain is empty or contains dots (invalid)
+      if (!subdomain || subdomain.includes('.')) {
+        console.log(`[SUBDOMAIN] Skipping - invalid subdomain: ${subdomain}`);
+        return next();
+      }
+
+      // Find project by subdomain (project name)
+      // Handle edge cases from deployment normalization
+      console.log(`[SUBDOMAIN] Looking for project with name: ${subdomain}`);
+
+      // Try multiple variations to handle normalization edge cases
+      const searchVariations = [
+        subdomain,  // exact match
+        subdomain.replace(/-/g, '_'),  // hyphens to underscores
+        subdomain.replace(/_/g, '-'),  // underscores to hyphens (reverse)
+        subdomain.replace(/--+/g, '-'),  // multiple hyphens to single
+        subdomain.replace(/^[-]+|[-]+$/g, ''),  // remove leading/trailing hyphens
+      ];
+
+      // Remove duplicates
+      const uniqueVariations = [...new Set(searchVariations.filter(v => v.length > 0))];
+
+      for (const variation of uniqueVariations) {
+        console.log(`[SUBDOMAIN] Trying variation: "${variation}"`);
+
+        // Try exact match
+        project = await Project.findOne({
+          name: variation,
+          status: 'active'
+        }).populate('lastDeployment');
+
+        if (project) {
+          console.log(`[SUBDOMAIN] Found with exact match: "${variation}"`);
+          break;
+        }
+
+        // Try case-insensitive match
+        project = await Project.findOne({
+          name: { $regex: new RegExp(`^${variation}$`, 'i') },
+          status: 'active'
+        }).populate('lastDeployment');
+
+        if (project) {
+          console.log(`[SUBDOMAIN] Found with case-insensitive match: "${variation}"`);
+          break;
+        }
+      }
     }
 
     // Find project by subdomain (project name)
+    // Handle edge cases from deployment normalization
     console.log(`[SUBDOMAIN] Looking for project with name: ${subdomain}`);
-    const project = await Project.findOne({
-      name: subdomain,
-      status: 'active'
-    }).populate('lastDeployment');
+    project = null;
+
+    // Try multiple variations to handle normalization edge cases
+    const searchVariations = [
+      subdomain,  // exact match
+      subdomain.replace(/-/g, '_'),  // hyphens to underscores
+      subdomain.replace(/_/g, '-'),  // underscores to hyphens (reverse)
+      subdomain.replace(/--+/g, '-'),  // multiple hyphens to single
+      subdomain.replace(/^[-]+|[-]+$/g, ''),  // remove leading/trailing hyphens
+    ];
+
+    // Remove duplicates
+    const uniqueVariations = [...new Set(searchVariations.filter(v => v.length > 0))];
+
+    for (const variation of uniqueVariations) {
+      console.log(`[SUBDOMAIN] Trying variation: "${variation}"`);
+
+      // Try exact match
+      project = await Project.findOne({
+        name: variation,
+        status: 'active'
+      }).populate('lastDeployment');
+
+      if (project) {
+        console.log(`[SUBDOMAIN] Found with exact match: "${variation}"`);
+        break;
+      }
+
+      // Try case-insensitive match
+      project = await Project.findOne({
+        name: { $regex: new RegExp(`^${variation}$`, 'i') },
+        status: 'active'
+      }).populate('lastDeployment');
+
+      if (project) {
+        console.log(`[SUBDOMAIN] Found with case-insensitive match: "${variation}"`);
+        break;
+      }
+    }
 
     console.log(`[SUBDOMAIN] Found project:`, project ? {
       id: project._id,

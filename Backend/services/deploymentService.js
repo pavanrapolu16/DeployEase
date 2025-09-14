@@ -186,13 +186,30 @@ class DeploymentService {
       await fs.access(sourceDir);
       await deployment.addLog('info', `Output directory found: ${outputDir}`);
 
-      // Generate subdomain-based URL
+      // Generate URL based on custom domain or subdomain
       const baseDomain = process.env.BASE_DOMAIN || 'deployease.in';
       const protocol = process.env.NODE_ENV === 'production' ? 'https' : 'http';
 
-      // Use project name as subdomain
-      const subdomain = project.name.toLowerCase().replace(/[^a-z0-9-]/g, '-');
-      const deployedUrl = `${protocol}://${subdomain}.${baseDomain}`;
+      let deployedUrl;
+
+      if (project.customDomain) {
+        // Use custom domain
+        deployedUrl = `${protocol}://${project.customDomain}`;
+        await deployment.addLog('info', `Using custom domain: ${project.customDomain}`);
+      } else {
+        // Use project name as subdomain with consistent normalization
+        const subdomain = project.name.toLowerCase()
+          .replace(/[^a-z0-9-]/g, '-')  // replace special chars with hyphens
+          .replace(/--+/g, '-')         // replace multiple hyphens with single
+          .replace(/^[-]+|[-]+$/g, ''); // remove leading/trailing hyphens
+
+        if (!subdomain || subdomain.length === 0) {
+          throw new Error('Project name results in invalid subdomain');
+        }
+
+        deployedUrl = `${protocol}://${subdomain}.${baseDomain}`;
+        await deployment.addLog('info', `Using subdomain: ${subdomain}.${baseDomain}`);
+      }
 
       await deployment.addLog('info', `Files deployed to: ${deployedUrl}`);
       await deployment.addLog('info', `Deployment directory: ${deploymentDir}`);

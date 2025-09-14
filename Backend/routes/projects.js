@@ -43,6 +43,34 @@ router.post('/', authenticateToken, async (req, res) => {
       });
     }
 
+    // Validate project name for subdomain compatibility
+    const normalizedName = name.toLowerCase().replace(/[^a-z0-9-]/g, '-').replace(/--+/g, '-').replace(/^[-]+|[-]+$/g, '');
+    if (!normalizedName || normalizedName.length === 0) {
+      return res.status(400).json({
+        success: false,
+        message: 'Project name results in invalid subdomain. Please use a name with alphanumeric characters.'
+      });
+    }
+    if (normalizedName.length > 63) {
+      return res.status(400).json({
+        success: false,
+        message: 'Project name is too long. Subdomain cannot exceed 63 characters.'
+      });
+    }
+
+    // Check if normalized name conflicts with existing projects
+    const existingNormalized = await Project.findOne({
+      name: { $regex: new RegExp(`^${normalizedName}$`, 'i') },
+      status: 'active'
+    });
+
+    if (existingNormalized) {
+      return res.status(400).json({
+        success: false,
+        message: 'A project with a similar name already exists that would create the same subdomain.'
+      });
+    }
+
     // Check if custom domain is already taken
     if (customDomain) {
       const existingDomain = await Project.findOne({
@@ -186,7 +214,38 @@ router.put('/:id', authenticateToken, async (req, res) => {
     }
 
     // Update project fields
-    if (name) project.name = name;
+    if (name) {
+      // Validate new name for subdomain compatibility
+      const normalizedName = name.toLowerCase().replace(/[^a-z0-9-]/g, '-').replace(/--+/g, '-').replace(/^[-]+|[-]+$/g, '');
+      if (!normalizedName || normalizedName.length === 0) {
+        return res.status(400).json({
+          success: false,
+          message: 'Project name results in invalid subdomain. Please use a name with alphanumeric characters.'
+        });
+      }
+      if (normalizedName.length > 63) {
+        return res.status(400).json({
+          success: false,
+          message: 'Project name is too long. Subdomain cannot exceed 63 characters.'
+        });
+      }
+
+      // Check if normalized name conflicts with other projects
+      const existingNormalized = await Project.findOne({
+        name: { $regex: new RegExp(`^${normalizedName}$`, 'i') },
+        status: 'active',
+        _id: { $ne: req.params.id }
+      });
+
+      if (existingNormalized) {
+        return res.status(400).json({
+          success: false,
+          message: 'A project with a similar name already exists that would create the same subdomain.'
+        });
+      }
+
+      project.name = name;
+    }
     if (description !== undefined) project.description = description;
     if (branch) project.branch = branch;
     if (buildCommand) project.buildCommand = buildCommand;
