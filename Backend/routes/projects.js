@@ -31,18 +31,17 @@ router.post('/', authenticateToken, async (req, res) => {
       });
     }
 
-    // Check if project with same repository already exists for this user (only active projects)
+    // Check if project with same repository already exists for this user
     console.log('Checking for existing project...');
     console.log('User ID:', req.user._id);
     console.log('Repository URL:', repositoryUrl);
 
     const existingProject = await Project.findOne({
       owner: req.user._id,
-      repositoryUrl: repositoryUrl,
-      status: 'active'  // Only check active projects
+      repositoryUrl: repositoryUrl
     });
 
-    console.log('Existing active project found:', !!existingProject);
+    console.log('Existing project found:', !!existingProject);
 
     if (existingProject) {
       console.log('Existing project details:', existingProject.name, existingProject.status);
@@ -62,43 +61,30 @@ router.post('/', authenticateToken, async (req, res) => {
     }
 
     // Include repository owner in normalized name for uniqueness
-    let normalizedName = `${baseNormalized}-${repositoryOwner.toLowerCase()}`;
+    const normalizedName = `${baseNormalized}-${repositoryOwner.toLowerCase()}`;
+    if (normalizedName.length > 63) {
+      return res.status(400).json({
+        success: false,
+        message: 'Project name combined with owner is too long. Subdomain cannot exceed 63 characters.'
+      });
+    }
 
-    // Check if normalized name conflicts with existing projects (any status)
+    // Check if normalized name conflicts with existing projects
     const existingNormalized = await Project.findOne({
       subdomain: normalizedName
     });
 
-    // If subdomain exists (even inactive), append timestamp to make it unique
     if (existingNormalized) {
-      const timestamp = Date.now().toString().slice(-6); // Last 6 digits of timestamp
-      normalizedName = `${baseNormalized}-${repositoryOwner.toLowerCase()}-${timestamp}`;
-
-      // Double-check the new subdomain doesn't conflict
-      const existingWithTimestamp = await Project.findOne({
-        subdomain: normalizedName
-      });
-
-      if (existingWithTimestamp) {
-        return res.status(400).json({
-          success: false,
-          message: 'Unable to generate unique subdomain. Please try a different project name.'
-        });
-      }
-    }
-
-    if (normalizedName.length > 63) {
       return res.status(400).json({
         success: false,
-        message: 'Generated subdomain is too long. Please use a shorter project name.'
+        message: 'A project with a similar name and owner already exists that would create the same subdomain.'
       });
     }
 
     // Check if custom domain is already taken
     if (customDomain) {
       const existingDomain = await Project.findOne({
-        customDomain: customDomain.toLowerCase(),
-        status: 'active'
+        customDomain: customDomain.toLowerCase()
       });
 
       if (existingDomain) {
@@ -318,9 +304,8 @@ router.delete('/:id', authenticateToken, async (req, res) => {
       });
     }
 
-    // Soft delete by setting status to inactive
-    project.status = 'inactive';
-    await project.save();
+    // Hard delete - completely remove from database
+    await Project.findByIdAndDelete(project._id);
 
     res.json({
       success: true,
