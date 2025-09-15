@@ -15,7 +15,7 @@ router.get('/', authenticateToken, async (req, res) => {
     const skip = (page - 1) * limit;
 
     // Get user's projects first
-    const userProjects = await Project.find({ owner: req.user.userId }).select('_id');
+    const userProjects = await Project.find({ owner: req.user._id }).select('_id');
     const projectIds = userProjects.map(p => p._id);
 
     const deployments = await Deployment.find({
@@ -54,6 +54,55 @@ router.get('/', authenticateToken, async (req, res) => {
   }
 });
 
+// @route   GET /api/deployments/stats
+// @desc    Get deployment statistics for user
+// @access  Private
+router.get('/stats', authenticateToken, async (req, res) => {
+  try {
+    // Get user's projects first
+    const userProjects = await Project.find({ owner: req.user._id }).select('_id');
+    const projectIds = userProjects.map(p => p._id);
+
+    // Get total deployments count
+    const totalDeployments = await Deployment.countDocuments({
+      project: { $in: projectIds }
+    });
+
+    // Get active deployments (building or pending)
+    const activeDeployments = await Deployment.countDocuments({
+      project: { $in: projectIds },
+      status: { $in: ['building', 'pending'] }
+    });
+
+    // Get successful deployments
+    const successfulDeployments = await Deployment.countDocuments({
+      project: { $in: projectIds },
+      status: 'success'
+    });
+
+    // Calculate success rate
+    const successRate = totalDeployments > 0 ? Math.round((successfulDeployments / totalDeployments) * 100) : 0;
+
+    res.json({
+      success: true,
+      message: 'Deployment statistics fetched successfully',
+      data: {
+        total: totalDeployments,
+        active: activeDeployments,
+        successful: successfulDeployments,
+        successRate: successRate
+      }
+    });
+  } catch (error) {
+    console.error('Error fetching deployment statistics:', error);
+    res.status(500).json({
+      success: false,
+      message: 'Failed to fetch deployment statistics',
+      error: process.env.NODE_ENV === 'development' ? error.message : undefined
+    });
+  }
+});
+
 // @route   GET /api/deployments/:id
 // @desc    Get deployment by ID
 // @access  Private
@@ -71,7 +120,7 @@ router.get('/:id', authenticateToken, async (req, res) => {
     }
 
     // Check if user owns the project
-    if (deployment.project.owner.toString() !== req.user.userId) {
+    if (deployment.project.owner.toString() !== req.user._id) {
       return res.status(403).json({
         success: false,
         message: 'Access denied'
@@ -102,7 +151,7 @@ router.get('/project/:projectId', authenticateToken, async (req, res) => {
   try {
     const project = await Project.findOne({
       _id: req.params.projectId,
-      owner: req.user.userId
+      owner: req.user._id
     });
 
     if (!project) {
@@ -157,7 +206,7 @@ router.put('/:id/status', authenticateToken, async (req, res) => {
     }
 
     // Check if user owns the project
-    if (deployment.project.owner.toString() !== req.user.userId) {
+    if (deployment.project.owner.toString() !== req.user._id) {
       return res.status(403).json({
         success: false,
         message: 'Access denied'
@@ -208,7 +257,7 @@ router.post('/:id/logs', authenticateToken, async (req, res) => {
     }
 
     // Check if user owns the project
-    if (deployment.project.owner.toString() !== req.user.userId) {
+    if (deployment.project.owner.toString() !== req.user._id) {
       return res.status(403).json({
         success: false,
         message: 'Access denied'
@@ -247,7 +296,7 @@ router.delete('/:id', authenticateToken, async (req, res) => {
     }
 
     // Check if user owns the project
-    if (deployment.project.owner.toString() !== req.user.userId) {
+    if (deployment.project.owner.toString() !== req.user._id) {
       return res.status(403).json({
         success: false,
         message: 'Access denied'

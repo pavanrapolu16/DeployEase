@@ -23,6 +23,14 @@ router.post('/', authenticateToken, async (req, res) => {
       });
     }
 
+    // Validate custom domain is required
+    if (!customDomain) {
+      return res.status(400).json({
+        success: false,
+        message: 'Custom domain is required for deployment'
+      });
+    }
+
     // Check if project with same repository already exists for this user
     console.log('Checking for existing project...');
     console.log('User ID:', req.user._id);
@@ -100,7 +108,7 @@ router.post('/', authenticateToken, async (req, res) => {
       branch: branch || 'main',
       buildCommand: buildCommand || 'npm run build',
       outputDir: outputDir || 'dist',
-      customDomain: customDomain ? customDomain.toLowerCase() : undefined,
+      customDomain: customDomain.toLowerCase(),
       subdomain: normalizedName,
       projectType: projectType || 'node'
     });

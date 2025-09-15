@@ -78,6 +78,7 @@ app.use('/api/oauth', require('./routes/oauth'));
 app.use('/api/github', require('./routes/github'));
 app.use('/api/projects', require('./routes/projects'));
 app.use('/api/deployments', require('./routes/deployments'));
+app.use('/api/users', require('./routes/users'));
 
 // Catch-all handler for client-side routing (serve index.html for non-API routes)
 app.get('*', (req, res) => {

@@ -40,22 +40,26 @@ const ProjectImportModal = ({ isOpen, onClose, repo }) => {
   const handleImport = async () => {
     if (!repo) return;
 
-    // Validate and slugify custom domain if provided
-    let fullCustomDomain = null;
-    if (customDomain.trim()) {
-      let subdomain = customDomain.trim();
-      // Simple slugify: lowercase, replace non-alphanumeric with '-', trim hyphens
-      subdomain = subdomain.toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/^-+|-+$/g, '');
-      if (!subdomain) {
-        showError('Subdomain cannot be empty after processing.');
-        return;
-      }
-      if (!/^[a-z0-9][a-z0-9-]{0,61}[a-z0-9]$/.test(subdomain)) {
-        showError('Subdomain must start and end with alphanumeric, 1-63 characters, letters/numbers/hyphens only.');
-        return;
-      }
-      fullCustomDomain = `${subdomain}.sthara.fun`;
+    // Validate custom domain is provided
+    if (!customDomain.trim()) {
+      showError('Custom domain is required for deployment.');
+      return;
     }
+
+    // Validate and slugify custom domain
+    let fullCustomDomain = null;
+    let subdomain = customDomain.trim();
+    // Simple slugify: lowercase, replace non-alphanumeric with '-', trim hyphens
+    subdomain = subdomain.toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/^-+|-+$/g, '');
+    if (!subdomain) {
+      showError('Subdomain cannot be empty after processing.');
+      return;
+    }
+    if (!/^[a-z0-9][a-z0-9-]{0,61}[a-z0-9]$/.test(subdomain)) {
+      showError('Subdomain must start and end with alphanumeric, 1-63 characters, letters/numbers/hyphens only.');
+      return;
+    }
+    fullCustomDomain = `${subdomain}.sthara.fun`;
 
     setLoading(true);
     try {
@@ -191,7 +195,7 @@ const ProjectImportModal = ({ isOpen, onClose, repo }) => {
 
                 <div className="mb-6">
                   <label className="block text-sm font-medium text-gray-700 mb-3">
-                    Custom Domain (Optional)
+                    Custom Domain <span className="text-red-500">*</span>
                   </label>
                   <div className="relative">
                     <input
@@ -201,13 +205,14 @@ const ProjectImportModal = ({ isOpen, onClose, repo }) => {
                       placeholder="myproject"
                       className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-primary-500 focus:border-transparent text-sm"
                       disabled={loading}
+                      required
                     />
                     <span className="absolute right-3 top-1/2 transform -translate-y-1/2 text-gray-500 text-sm pointer-events-none">
                       .sthara.fun
                     </span>
                   </div>
                   <p className="mt-1 text-xs text-gray-500">
-                    Choose a unique subdomain for your project (e.g., myproject.sthara.fun). Leave empty for auto-assigned.
+                    Choose a unique subdomain for your project (e.g., myproject.sthara.fun). This is required for deployment.
                   </p>
                 </div>
               </div>

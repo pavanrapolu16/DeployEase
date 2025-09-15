@@ -1,10 +1,13 @@
 import { useState, useEffect } from "react";
+import { motion } from "framer-motion";
 import { useAuth } from "../contexts/AuthContext";
 import { useToast } from "../contexts/ToastContext";
 import { githubService } from "../services/githubService";
 import { apiService } from "../services/apiService";
 import ProjectImportModal from "../components/ui/ProjectImportModal";
-import { FaGithub, FaCode, FaRocket, FaUser, FaBars, FaTimes, FaGlobe, FaServer, FaCog } from 'react-icons/fa';
+import EditProfileModal from "../components/ui/EditProfileModal";
+import BuildSettingsModal from "../components/ui/BuildSettingsModal";
+import { FaGithub, FaCode, FaRocket, FaUser, FaBars, FaTimes, FaGlobe, FaServer, FaCog, FaTrash, FaEdit, FaCogs } from 'react-icons/fa';
 
 const Dashboard = () => {
   const { user, token, logout } = useAuth();
@@ -27,6 +30,17 @@ const Dashboard = () => {
   const [importingUrl, setImportingUrl] = useState(false);
   const [deploymentPolling, setDeploymentPolling] = useState({});
   const [pollingIntervals, setPollingIntervals] = useState({});
+  const [editProfileModalOpen, setEditProfileModalOpen] = useState(false);
+  const [buildSettingsModalOpen, setBuildSettingsModalOpen] = useState(false);
+  const [selectedProjectForSettings, setSelectedProjectForSettings] = useState(null);
+  const [deploymentStats, setDeploymentStats] = useState({
+    total: 0,
+    active: 0,
+    successful: 0,
+    successRate: 0
+  });
+  const [recentDeployments, setRecentDeployments] = useState([]);
+  const [deploymentsLoading, setDeploymentsLoading] = useState(true);
 
   // Check GitHub connection
   useEffect(() => {
@@ -108,6 +122,50 @@ const Dashboard = () => {
 
     if (token) {
       fetchProjects();
+    }
+  }, [token]);
+
+  // Fetch recent deployments
+  useEffect(() => {
+    const fetchRecentDeployments = async () => {
+      if (!token) return;
+
+      try {
+        setDeploymentsLoading(true);
+        const response = await apiService.get('/deployments?limit=5');
+        setRecentDeployments(response.data?.data?.deployments || []);
+      } catch (err) {
+        console.error('Error fetching deployments:', err);
+      } finally {
+        setDeploymentsLoading(false);
+      }
+    };
+
+    if (token) {
+      fetchRecentDeployments();
+    }
+  }, [token]);
+
+  // Fetch deployment statistics
+  useEffect(() => {
+    const fetchDeploymentStats = async () => {
+      if (!token) return;
+
+      try {
+        const response = await apiService.get('/deployments/stats');
+        setDeploymentStats(response.data?.data || {
+          total: 0,
+          active: 0,
+          successful: 0,
+          successRate: 0
+        });
+      } catch (err) {
+        console.error('Error fetching deployment stats:', err);
+      }
+    };
+
+    if (token) {
+      fetchDeploymentStats();
     }
   }, [token]);
 
@@ -254,6 +312,54 @@ const Dashboard = () => {
     }
   };
 
+  // Delete project handler
+  const handleDeleteProject = async (projectId) => {
+    if (!window.confirm('Are you sure you want to delete this project? This action cannot be undone.')) {
+      return;
+    }
+
+    try {
+      await apiService.delete(`/projects/${projectId}`);
+      showSuccess('Project deleted successfully!');
+
+      // Refresh projects list
+      const response = await apiService.get('/projects');
+      setProjects(response.data?.projects || []);
+    } catch (err) {
+      console.error('Error deleting project:', err);
+      showError('Failed to delete project');
+    }
+  };
+
+  // Open edit profile modal
+  const handleEditProfile = () => {
+    setEditProfileModalOpen(true);
+  };
+
+  // Handle profile update
+  const handleProfileUpdate = (updatedUser) => {
+    // Update user in auth context if needed
+    // For now, just show success message
+    showSuccess('Profile updated successfully!');
+  };
+
+  // Open build settings modal
+  const handleBuildSettings = (project) => {
+    setSelectedProjectForSettings(project);
+    setBuildSettingsModalOpen(true);
+  };
+
+  // Handle build settings update
+  const handleSettingsUpdate = (updatedProject) => {
+    // Update project in projects list
+    setProjects(prevProjects =>
+      prevProjects.map(project =>
+        project._id === updatedProject._id ? updatedProject : project
+      )
+    );
+    showSuccess('Build settings updated successfully!');
+  };
+
   // Search repositories handler
   const handleSearch = async (e) => {
     e.preventDefault();
@@ -328,9 +434,9 @@ const Dashboard = () => {
   };
 
   return (
-    <div className="min-h-screen flex flex-col bg-gray-50">
+    <div className="min-h-screen flex flex-col bg-gradient-to-br from-gray-50 via-white to-primary-50/30">
       {/* Dashboard Topbar */}
-      <header className="bg-white shadow-md px-4 py-4 md:px-6 flex justify-between items-center z-40">
+      <header className="bg-white/80 backdrop-blur-sm shadow-lg border-b border-white/20 px-4 py-4 md:px-6 flex justify-between items-center z-40">
         <div className="flex items-center space-x-4">
           <button
             onClick={() => setShowSidebar(!showSidebar)}
@@ -369,7 +475,7 @@ const Dashboard = () => {
         {/* Sidebar */}
         <aside className={`${
           showSidebar ? 'translate-x-0' : '-translate-x-full'
-        } fixed inset-y-0 left-0 z-40 w-64 bg-white shadow-xl transform transition-transform duration-300 ease-in-out md:relative md:translate-x-0 md:shadow-lg p-6`}>
+        } fixed inset-y-0 left-0 z-40 w-64 bg-white/90 backdrop-blur-md shadow-xl border-r border-white/20 transform transition-transform duration-300 ease-in-out md:relative md:translate-x-0 md:shadow-lg p-6`}>
           <div className="flex justify-between items-center mb-6">
             <h2 className="text-lg font-semibold text-primary-600">Menu</h2>
             <button
@@ -409,6 +515,15 @@ const Dashboard = () => {
             </li>
             <li>
               <button
+                onClick={() => { scrollToSection('deployments'); setShowSidebar(false); }}
+                className="w-full text-left flex items-center space-x-3 py-2 px-3 rounded-lg hover:bg-primary-50 hover:text-primary-600 transition-colors"
+              >
+                <FaRocket size={18} />
+                <span>Deployments</span>
+              </button>
+            </li>
+            <li>
+              <button
                 onClick={() => { scrollToSection('settings'); setShowSidebar(false); }}
                 className="w-full text-left flex items-center space-x-3 py-2 px-3 rounded-lg hover:bg-primary-50 hover:text-primary-600 transition-colors"
               >
@@ -421,10 +536,34 @@ const Dashboard = () => {
 
         {/* Main Content */}
         <main className={`flex-1 p-4 md:p-6 transition-all ${showSidebar ? 'md:ml-0' : ''}`}>
-          <h2 className="text-2xl font-bold mb-6 text-gray-900 flex items-center space-x-2">
-            <FaUser className="text-primary-600" />
-            <span>Welcome, {user?.firstName || user?.name || "User"} 👋</span>
-          </h2>
+          <div className="mb-8">
+            <div className="card-modern p-6 bg-gradient-to-r from-primary-50 to-accent-50 border border-primary-100">
+              <div className="flex flex-col md:flex-row md:items-center md:justify-between">
+                <div>
+                  <h2 className="text-3xl font-bold text-gray-900 mb-2">
+                    Welcome back, {user?.firstName || user?.name || "User"}! 👋
+                  </h2>
+                  <p className="text-gray-600 mb-4 md:mb-0">
+                    Ready to deploy your next project? You have {projects.length} project{projects.length !== 1 ? 's' : ''} and {deploymentStats.successful} successful deployment{deploymentStats.successful !== 1 ? 's' : ''}.
+                  </p>
+                </div>
+                <div className="flex gap-3">
+                  <button
+                    onClick={() => scrollToSection('repositories')}
+                    className="btn-primary-modern px-6 py-3"
+                  >
+                    Import Repository
+                  </button>
+                  <button
+                    onClick={() => scrollToSection('projects')}
+                    className="btn-secondary-modern px-6 py-3"
+                  >
+                    View Projects
+                  </button>
+                </div>
+              </div>
+            </div>
+          </div>
 
           {/* Overview Section */}
           <section id="overview" className="mb-8">
@@ -432,40 +571,91 @@ const Dashboard = () => {
               <FaGlobe className="text-primary-600" />
               <span>Overview</span>
             </h3>
-            <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
-              <div className="bg-white p-6 rounded-xl shadow-medium hover:shadow-large transition-shadow border border-gray-100">
+            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">
+              <motion.div
+                className="card-modern p-6 h-full hover:scale-105 transition-all duration-300 group"
+                whileHover={{ y: -5 }}
+                transition={{ duration: 0.2 }}
+              >
                 <div className="flex items-center space-x-3 mb-3">
-                  <div className={`p-2 rounded-lg ${githubConnected ? 'bg-green-100 text-green-600' : checkingGithub ? 'bg-yellow-100 text-yellow-600' : 'bg-red-100 text-red-600'}`}>
-                    <FaGithub size={20} />
+                  <div className={`w-12 h-12 rounded-2xl flex items-center justify-center text-xl shadow-lg group-hover:shadow-xl transition-all duration-300 ${githubConnected ? 'bg-gradient-to-br from-green-500 to-emerald-500 text-white' : checkingGithub ? 'bg-gradient-to-br from-yellow-500 to-orange-500 text-white' : 'bg-gradient-to-br from-red-500 to-pink-500 text-white'}`}>
+                    <FaGithub />
                   </div>
                   <h4 className="font-semibold text-gray-900">GitHub Status</h4>
                 </div>
                 <p className={`text-sm font-medium ${githubConnected ? 'text-green-700' : checkingGithub ? 'text-yellow-700' : 'text-red-700'}`}>
                   {checkingGithub ? 'Checking...' : githubConnected ? 'Connected' : 'Not Connected'}
                 </p>
-              </div>
-              <div className="bg-white p-6 rounded-xl shadow-medium hover:shadow-large transition-shadow border border-gray-100">
+                <div className="absolute top-0 right-0 w-20 h-20 bg-gradient-to-br from-primary-100 to-accent-100 rounded-full blur-3xl opacity-0 group-hover:opacity-50 transition-opacity duration-500"></div>
+              </motion.div>
+              <motion.div
+                className="card-modern p-6 h-full hover:scale-105 transition-all duration-300 group"
+                whileHover={{ y: -5 }}
+                transition={{ duration: 0.2 }}
+              >
                 <div className="flex items-center space-x-3 mb-3">
-                  <div className="p-2 rounded-lg bg-primary-100 text-primary-600">
-                    <FaCode size={20} />
+                  <div className="w-12 h-12 bg-gradient-to-br from-primary-500 to-accent-500 rounded-2xl flex items-center justify-center text-xl text-white shadow-lg group-hover:shadow-xl transition-all duration-300">
+                    <FaCode />
                   </div>
                   <h4 className="font-semibold text-gray-900">Repositories</h4>
                 </div>
-                <p className="text-2xl font-bold text-primary-600">
+                <p className="text-3xl font-bold bg-gradient-to-r from-primary-600 to-accent-600 bg-clip-text text-transparent">
                   {loading ? '...' : repos.length}
                 </p>
                 <p className="text-sm text-gray-600">found</p>
-              </div>
-              <div className="bg-white p-6 rounded-xl shadow-medium hover:shadow-large transition-shadow border border-gray-100">
+                <div className="absolute top-0 right-0 w-20 h-20 bg-gradient-to-br from-primary-100 to-accent-100 rounded-full blur-3xl opacity-0 group-hover:opacity-50 transition-opacity duration-500"></div>
+              </motion.div>
+              <motion.div
+                className="card-modern p-6 h-full hover:scale-105 transition-all duration-300 group"
+                whileHover={{ y: -5 }}
+                transition={{ duration: 0.2 }}
+              >
                 <div className="flex items-center space-x-3 mb-3">
-                  <div className="p-2 rounded-lg bg-blue-100 text-blue-600">
-                    <FaRocket size={20} />
+                  <div className="w-12 h-12 bg-gradient-to-br from-blue-500 to-cyan-500 rounded-2xl flex items-center justify-center text-xl text-white shadow-lg group-hover:shadow-xl transition-all duration-300">
+                    <FaRocket />
                   </div>
                   <h4 className="font-semibold text-gray-900">Deployments</h4>
                 </div>
-                <p className="text-2xl font-bold text-blue-600">0</p>
+                <p className="text-3xl font-bold bg-gradient-to-r from-blue-600 to-cyan-600 bg-clip-text text-transparent">
+                  {deploymentStats.active}
+                </p>
                 <p className="text-sm text-gray-600">active</p>
-              </div>
+                <div className="absolute top-0 right-0 w-20 h-20 bg-gradient-to-br from-blue-100 to-cyan-100 rounded-full blur-3xl opacity-0 group-hover:opacity-50 transition-opacity duration-500"></div>
+              </motion.div>
+              <motion.div
+                className="card-modern p-6 h-full hover:scale-105 transition-all duration-300 group"
+                whileHover={{ y: -5 }}
+                transition={{ duration: 0.2 }}
+              >
+                <div className="flex items-center space-x-3 mb-3">
+                  <div className="w-12 h-12 bg-gradient-to-br from-green-500 to-emerald-500 rounded-2xl flex items-center justify-center text-xl text-white shadow-lg group-hover:shadow-xl transition-all duration-300">
+                    <FaRocket />
+                  </div>
+                  <h4 className="font-semibold text-gray-900">Success Rate</h4>
+                </div>
+                <p className="text-3xl font-bold bg-gradient-to-r from-green-600 to-emerald-600 bg-clip-text text-transparent">
+                  {deploymentStats.successRate}%
+                </p>
+                <p className="text-sm text-gray-600">success rate</p>
+                <div className="absolute top-0 right-0 w-20 h-20 bg-gradient-to-br from-green-100 to-emerald-100 rounded-full blur-3xl opacity-0 group-hover:opacity-50 transition-opacity duration-500"></div>
+              </motion.div>
+              <motion.div
+                className="card-modern p-6 h-full hover:scale-105 transition-all duration-300 group"
+                whileHover={{ y: -5 }}
+                transition={{ duration: 0.2 }}
+              >
+                <div className="flex items-center space-x-3 mb-3">
+                  <div className="w-12 h-12 bg-gradient-to-br from-purple-500 to-pink-500 rounded-2xl flex items-center justify-center text-xl text-white shadow-lg group-hover:shadow-xl transition-all duration-300">
+                    <FaServer />
+                  </div>
+                  <h4 className="font-semibold text-gray-900">Total Deploys</h4>
+                </div>
+                <p className="text-3xl font-bold bg-gradient-to-r from-purple-600 to-pink-600 bg-clip-text text-transparent">
+                  {deploymentStats.total}
+                </p>
+                <p className="text-sm text-gray-600">all time</p>
+                <div className="absolute top-0 right-0 w-20 h-20 bg-gradient-to-br from-purple-100 to-pink-100 rounded-full blur-3xl opacity-0 group-hover:opacity-50 transition-opacity duration-500"></div>
+              </motion.div>
             </div>
           </section>
 
@@ -545,11 +735,12 @@ const Dashboard = () => {
             ) : (
               <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
                 {repos.map((repo) => (
-                  <div
+                  <motion.div
                     key={repo.id}
-                    className="bg-white rounded-xl shadow-medium hover:shadow-large transition-all duration-300 border border-gray-100 overflow-hidden group"
+                    className="card-modern p-6 h-full hover:scale-105 transition-all duration-300 group overflow-hidden"
+                    whileHover={{ y: -5 }}
+                    transition={{ duration: 0.2 }}
                   >
-                    <div className="p-6">
                       <div className="flex items-center space-x-3 mb-3">
                         <FaGithub className="text-primary-600" size={20} />
                         <span className="font-semibold text-lg text-gray-900 truncate">{repo.name}</span>
@@ -571,8 +762,7 @@ const Dashboard = () => {
                           Import
                         </button>
                       </div>
-                    </div>
-                  </div>
+                  </motion.div>
                 ))}
               </div>
             )}
@@ -611,11 +801,12 @@ const Dashboard = () => {
             ) : (
               <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
                 {projects.map((project) => (
-                  <div
+                  <motion.div
                     key={project._id}
-                    className="bg-white rounded-xl shadow-medium hover:shadow-large transition-all duration-300 border border-gray-100 overflow-hidden group"
+                    className="card-modern p-6 h-full hover:scale-105 transition-all duration-300 group overflow-hidden"
+                    whileHover={{ y: -5 }}
+                    transition={{ duration: 0.2 }}
                   >
-                    <div className="p-6">
                       <div className="flex items-center justify-between mb-3">
                         <span className="font-semibold text-lg text-gray-900 truncate">{project.name}</span>
                         <span className={`px-2 py-1 text-xs font-medium rounded-full ${
@@ -672,41 +863,113 @@ const Dashboard = () => {
                           <div className="mt-3 pt-3 border-t border-gray-100">
                             <span className="text-xs text-yellow-600 bg-yellow-100 px-2 py-1 rounded-full">Pending</span>
                           </div>
-                          <button
-                            onClick={() => handleDeployProject(project._id)}
-                            disabled={deploymentPolling[project._id]}
-                            className="w-full mt-3 bg-primary-600 hover:bg-primary-700 text-white py-2 px-4 rounded-lg font-semibold transition-colors flex items-center justify-center space-x-2 shadow-medium hover:shadow-glow disabled:opacity-50 disabled:cursor-not-allowed"
-                          >
-                            {deploymentPolling[project._id] ? (
-                              <>
-                                <div className="w-4 h-4 border-2 border-white border-t-transparent rounded-full animate-spin"></div>
-                                <span>Deploying...</span>
-                              </>
-                            ) : (
-                              <>
-                                <FaRocket />
-                                <span>Deploy Now</span>
-                              </>
-                            )}
-                          </button>
+                          <div className="flex gap-2 mt-3">
+                            <button
+                              onClick={() => handleDeployProject(project._id)}
+                              disabled={deploymentPolling[project._id]}
+                              className="flex-1 bg-primary-600 hover:bg-primary-700 text-white py-2 px-4 rounded-lg font-semibold transition-colors flex items-center justify-center space-x-2 shadow-medium hover:shadow-glow disabled:opacity-50 disabled:cursor-not-allowed"
+                            >
+                              {deploymentPolling[project._id] ? (
+                                <>
+                                  <div className="w-4 h-4 border-2 border-white border-t-transparent rounded-full animate-spin"></div>
+                                  <span>Deploying...</span>
+                                </>
+                              ) : (
+                                <>
+                                  <FaRocket />
+                                  <span>Deploy Now</span>
+                                </>
+                              )}
+                            </button>
+                            <button
+                              onClick={() => handleDeleteProject(project._id)}
+                              className="bg-red-500 hover:bg-red-600 text-white py-2 px-4 rounded-lg font-semibold transition-colors flex items-center justify-center shadow-medium hover:shadow-glow"
+                            >
+                              <FaTrash size={16} />
+                            </button>
+                          </div>
                         </div>
                       ) : (
                         <div className="mt-auto">
                           <p className="text-sm text-gray-600 mb-3">Ready to deploy</p>
-                          <button
-                            onClick={() => handleDeployProject(project._id)}
-                            className="w-full bg-primary-600 hover:bg-primary-700 text-white py-3 px-4 rounded-lg font-semibold transition-colors group-hover:scale-105 flex items-center justify-center space-x-2 shadow-medium hover:shadow-glow"
-                          >
-                            <FaRocket />
-                            <span>Deploy Now</span>
-                          </button>
+                          <div className="flex gap-2">
+                            <button
+                              onClick={() => handleDeployProject(project._id)}
+                              className="flex-1 bg-primary-600 hover:bg-primary-700 text-white py-3 px-4 rounded-lg font-semibold transition-colors group-hover:scale-105 flex items-center justify-center space-x-2 shadow-medium hover:shadow-glow"
+                            >
+                              <FaRocket />
+                              <span>Deploy Now</span>
+                            </button>
+                            <button
+                              onClick={() => handleDeleteProject(project._id)}
+                              className="bg-red-500 hover:bg-red-600 text-white py-2 px-4 rounded-lg font-semibold transition-colors flex items-center justify-center shadow-medium hover:shadow-glow"
+                            >
+                              <FaTrash size={16} />
+                            </button>
+                          </div>
                         </div>
                       )}
-                    </div>
-                  </div>
+                  </motion.div>
                 ))}
               </div>
             )}
+          </section>
+
+          {/* Deployment History Section */}
+          <section id="deployments" className="mb-8">
+            <h3 className="text-xl font-semibold mb-4 text-gray-900 flex items-center space-x-2">
+              <FaRocket className="text-primary-600" />
+              <span>Recent Deployments</span>
+            </h3>
+            <div className="card-modern p-6">
+              {deploymentsLoading ? (
+                <div className="space-y-4">
+                  {Array.from({ length: 3 }).map((_, i) => (
+                    <div key={i} className="animate-pulse">
+                      <div className="h-4 bg-gray-200 rounded w-3/4 mb-2"></div>
+                      <div className="h-3 bg-gray-200 rounded w-1/2"></div>
+                    </div>
+                  ))}
+                </div>
+              ) : recentDeployments.length === 0 ? (
+                <div className="text-center py-8">
+                  <FaRocket className="mx-auto mb-4 text-gray-300 text-4xl" />
+                  <p className="text-gray-500">No deployments yet</p>
+                  <p className="text-sm text-gray-400 mt-2">Your recent deployments will appear here</p>
+                </div>
+              ) : (
+                <div className="space-y-4">
+                  {recentDeployments.map((deployment) => (
+                    <div key={deployment._id} className="flex items-center justify-between p-4 border border-gray-100 rounded-lg hover:bg-gray-50 transition-colors">
+                      <div className="flex items-center space-x-4">
+                        <div className={`w-3 h-3 rounded-full ${
+                          deployment.status === 'success' ? 'bg-green-500' :
+                          deployment.status === 'failed' ? 'bg-red-500' :
+                          deployment.status === 'building' ? 'bg-yellow-500' :
+                          'bg-gray-400'
+                        }`}></div>
+                        <div>
+                          <p className="font-medium text-gray-900">{deployment.project?.name || 'Unknown Project'}</p>
+                          <p className="text-sm text-gray-500">
+                            {new Date(deployment.createdAt).toLocaleDateString()} at {new Date(deployment.createdAt).toLocaleTimeString()}
+                          </p>
+                        </div>
+                      </div>
+                      <div className="text-right">
+                        <span className={`px-2 py-1 text-xs font-medium rounded-full ${
+                          deployment.status === 'success' ? 'bg-green-100 text-green-800' :
+                          deployment.status === 'failed' ? 'bg-red-100 text-red-800' :
+                          deployment.status === 'building' ? 'bg-yellow-100 text-yellow-800' :
+                          'bg-gray-100 text-gray-800'
+                        }`}>
+                          {deployment.status}
+                        </span>
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              )}
+            </div>
           </section>
 
           {/* Settings Section */}
@@ -715,23 +978,41 @@ const Dashboard = () => {
               <FaCog className="text-primary-600" />
               <span>Settings</span>
             </h3>
-            <div className="bg-white p-6 rounded-xl shadow-medium border border-gray-100">
+            <div className="card-modern p-6">
               <div className="space-y-6">
                 <div>
                   <h4 className="font-semibold text-gray-900 mb-3">Account Settings</h4>
                   <p className="text-gray-600 mb-4">Manage your profile and preferences.</p>
-                  <button className="text-primary-600 hover:text-primary-700 text-sm font-medium flex items-center space-x-1">
-                    <FaUser size={14} />
+                  <button
+                    onClick={handleEditProfile}
+                    className="text-primary-600 hover:text-primary-700 text-sm font-medium flex items-center space-x-1 transition-colors"
+                  >
+                    <FaEdit size={14} />
                     <span>Edit Profile</span>
                   </button>
                 </div>
                 <div>
                   <h4 className="font-semibold text-gray-900 mb-3">Deployment Preferences</h4>
                   <p className="text-gray-600 mb-4">Configure default build settings and notifications.</p>
-                  <button className="text-primary-600 hover:text-primary-700 text-sm font-medium flex items-center space-x-1">
-                    <FaServer size={14} />
-                    <span>Build Settings</span>
-                  </button>
+                  <div className="space-y-2">
+                    {projects.length > 0 ? (
+                      projects.map((project) => (
+                        <button
+                          key={project._id}
+                          onClick={() => handleBuildSettings(project)}
+                          className="w-full text-left text-primary-600 hover:text-primary-700 text-sm font-medium flex items-center space-x-2 p-2 rounded-lg hover:bg-primary-50 transition-colors"
+                        >
+                          <FaCogs size={12} />
+                          <span>{project.name} Settings</span>
+                        </button>
+                      ))
+                    ) : (
+                      <button className="text-gray-400 text-sm font-medium flex items-center space-x-1 cursor-not-allowed">
+                        <FaServer size={14} />
+                        <span>No projects available</span>
+                      </button>
+                    )}
+                  </div>
                 </div>
                 <div className="pt-4 border-t border-gray-200">
                   <p className="text-sm text-gray-500">More settings coming soon...</p>
@@ -743,7 +1024,7 @@ const Dashboard = () => {
       </div>
 
       {/* Footer */}
-      <footer className="bg-white border-t border-gray-200 p-4 text-center text-gray-500">
+      <footer className="bg-white/80 backdrop-blur-sm border-t border-white/20 p-4 text-center text-gray-600">
         <p className="text-sm">© {new Date().getFullYear()} DeployEase. All rights reserved.</p>
       </footer>
 
@@ -752,6 +1033,22 @@ const Dashboard = () => {
         isOpen={importModalOpen}
         onClose={handleCloseImportModal}
         repo={selectedRepo}
+      />
+
+      {/* Edit Profile Modal */}
+      <EditProfileModal
+        isOpen={editProfileModalOpen}
+        onClose={() => setEditProfileModalOpen(false)}
+        user={user}
+        onProfileUpdate={handleProfileUpdate}
+      />
+
+      {/* Build Settings Modal */}
+      <BuildSettingsModal
+        isOpen={buildSettingsModalOpen}
+        onClose={() => setBuildSettingsModalOpen(false)}
+        project={selectedProjectForSettings}
+        onSettingsUpdate={handleSettingsUpdate}
       />
     </div>
   );
