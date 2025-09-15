@@ -686,6 +686,14 @@ const Dashboard = () => {
                           <div className="mt-3 pt-3 border-t border-gray-100">
                             <span className="text-xs text-green-600 bg-green-100 px-2 py-1 rounded-full">Live</span>
                           </div>
+                          <div className="flex gap-2 mt-3">
+                            <button
+                              onClick={() => handleDeleteProject(project._id)}
+                              className="bg-red-500 hover:bg-red-600 text-white py-2 px-4 rounded-lg font-semibold transition-colors flex items-center justify-center shadow-medium hover:shadow-glow"
+                            >
+                              <FaTrash size={16} />
+                            </button>
+                          </div>
                         </div>
                       ) : project.customDomain ? (
                         <div className="mt-auto">
