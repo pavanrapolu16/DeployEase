@@ -1,5 +1,4 @@
 import { useState, useEffect } from "react";
-import { motion } from "framer-motion";
 import { useAuth } from "../contexts/AuthContext";
 import { useToast } from "../contexts/ToastContext";
 import { githubService } from "../services/githubService";
@@ -18,14 +17,9 @@ const Dashboard = () => {
   const [projectsLoading, setProjectsLoading] = useState(true);
   const [githubConnected, setGithubConnected] = useState(false);
   const [checkingGithub, setCheckingGithub] = useState(true);
-  const [importing, setImporting] = useState({});
   const [importModalOpen, setImportModalOpen] = useState(false);
   const [selectedRepo, setSelectedRepo] = useState(null);
   const [showSidebar, setShowSidebar] = useState(false);
-  const [searchQuery, setSearchQuery] = useState('');
-  const [searchResults, setSearchResults] = useState([]);
-  const [searching, setSearching] = useState(false);
-  const [showSearchResults, setShowSearchResults] = useState(false);
   const [importUrl, setImportUrl] = useState('');
   const [importingUrl, setImportingUrl] = useState(false);
   const [deploymentPolling, setDeploymentPolling] = useState({});
@@ -39,8 +33,6 @@ const Dashboard = () => {
     successful: 0,
     successRate: 0
   });
-  const [recentDeployments, setRecentDeployments] = useState([]);
-  const [deploymentsLoading, setDeploymentsLoading] = useState(true);
 
   // Check GitHub connection
   useEffect(() => {
@@ -64,6 +56,14 @@ const Dashboard = () => {
       setGithubConnected(false);
     }
   }, [token]);
+
+  // Handle GitHub connection errors gracefully
+  useEffect(() => {
+    if (!githubConnected && !checkingGithub) {
+      // GitHub not connected - this is normal for new users
+      console.log("GitHub not connected - user needs to connect account");
+    }
+  }, [githubConnected, checkingGithub]);
 
   // Fetch GitHub repositories
   useEffect(() => {
@@ -105,13 +105,15 @@ const Dashboard = () => {
         setProjects(projectsData);
 
         // Check for projects with ongoing deployments and start polling
-        projectsData.forEach(project => {
-          if (project.lastDeployment &&
-              (project.lastDeployment.status === 'pending' || project.lastDeployment.status === 'building')) {
-            setDeploymentPolling(prev => ({ ...prev, [project._id]: true }));
-            pollDeploymentStatus(project._id, project.lastDeployment._id);
-          }
-        });
+        if (Array.isArray(projectsData)) {
+          projectsData.forEach(project => {
+            if (project.lastDeployment &&
+                (project.lastDeployment.status === 'pending' || project.lastDeployment.status === 'building')) {
+              setDeploymentPolling(prev => ({ ...prev, [project._id]: true }));
+              pollDeploymentStatus(project._id);
+            }
+          });
+        }
       } catch (err) {
         console.error('Error fetching projects:', err);
         showError('Failed to load projects');
@@ -125,26 +127,6 @@ const Dashboard = () => {
     }
   }, [token]);
 
-  // Fetch recent deployments
-  useEffect(() => {
-    const fetchRecentDeployments = async () => {
-      if (!token) return;
-
-      try {
-        setDeploymentsLoading(true);
-        const response = await apiService.get('/deployments?limit=5');
-        setRecentDeployments(response.data?.data?.deployments || []);
-      } catch (err) {
-        console.error('Error fetching deployments:', err);
-      } finally {
-        setDeploymentsLoading(false);
-      }
-    };
-
-    if (token) {
-      fetchRecentDeployments();
-    }
-  }, [token]);
 
   // Fetch deployment statistics
   useEffect(() => {
@@ -153,7 +135,7 @@ const Dashboard = () => {
 
       try {
         const response = await apiService.get('/deployments/stats');
-        setDeploymentStats(response.data?.data || {
+        setDeploymentStats(response.data || {
           total: 0,
           active: 0,
           successful: 0,
@@ -167,7 +149,7 @@ const Dashboard = () => {
     if (token) {
       fetchDeploymentStats();
     }
-  }, [token]);
+  }, [token, showError]);
 
   // Cleanup polling intervals on unmount
   useEffect(() => {
@@ -211,13 +193,15 @@ const Dashboard = () => {
           setProjects(projectsData);
 
           // Check for projects with ongoing deployments and start polling
-          projectsData.forEach(project => {
-            if (project.lastDeployment &&
-                (project.lastDeployment.status === 'pending' || project.lastDeployment.status === 'building')) {
-              setDeploymentPolling(prev => ({ ...prev, [project._id]: true }));
-              pollDeploymentStatus(project._id, project.lastDeployment._id);
-            }
-          });
+          if (Array.isArray(projectsData)) {
+            projectsData.forEach(project => {
+              if (project.lastDeployment &&
+                  (project.lastDeployment.status === 'pending' || project.lastDeployment.status === 'building')) {
+                setDeploymentPolling(prev => ({ ...prev, [project._id]: true }));
+                pollDeploymentStatus(project._id);
+              }
+            });
+          }
         } catch (err) {
           console.error('Error fetching projects:', err);
         } finally {
@@ -229,7 +213,7 @@ const Dashboard = () => {
   };
 
   // Poll deployment status
-  const pollDeploymentStatus = async (projectId, deploymentId) => {
+  const pollDeploymentStatus = async (projectId) => {
     // Clear any existing interval for this project
     if (pollingIntervals[projectId]) {
       clearInterval(pollingIntervals[projectId]);
@@ -242,7 +226,7 @@ const Dashboard = () => {
         setProjects(projectsData);
 
         // Find the project and check deployment status
-        const project = projectsData.find(p => p._id === projectId);
+        const project = Array.isArray(projectsData) ? projectsData.find(p => p._id === projectId) : null;
         if (project && project.lastDeployment) {
           const deployment = project.lastDeployment;
           if (deployment.status === 'success' || deployment.status === 'failed') {
@@ -300,7 +284,7 @@ const Dashboard = () => {
       if (deployment) {
         // Start polling for deployment status
         setDeploymentPolling(prev => ({ ...prev, [projectId]: true }));
-        pollDeploymentStatus(projectId, deployment._id);
+        pollDeploymentStatus(projectId);
       } else {
         // Fallback: refresh immediately if no deployment returned
         const projectsResponse = await apiService.get('/projects');
@@ -337,7 +321,7 @@ const Dashboard = () => {
   };
 
   // Handle profile update
-  const handleProfileUpdate = (updatedUser) => {
+  const handleProfileUpdate = () => {
     // Update user in auth context if needed
     // For now, just show success message
     showSuccess('Profile updated successfully!');
@@ -360,31 +344,6 @@ const Dashboard = () => {
     showSuccess('Build settings updated successfully!');
   };
 
-  // Search repositories handler
-  const handleSearch = async (e) => {
-    e.preventDefault();
-    if (!searchQuery.trim()) return;
-
-    try {
-      setSearching(true);
-      setShowSearchResults(true);
-      const results = await githubService.searchRepos(searchQuery.trim());
-      setSearchResults(results || []);
-    } catch (err) {
-      console.error('Error searching repos:', err);
-      showError('Failed to search repositories');
-      setSearchResults([]);
-    } finally {
-      setSearching(false);
-    }
-  };
-
-  // Clear search
-  const handleClearSearch = () => {
-    setSearchQuery('');
-    setSearchResults([]);
-    setShowSearchResults(false);
-  };
 
   // Import by URL handler
   const handleImportByUrl = async (e) => {
@@ -392,7 +351,7 @@ const Dashboard = () => {
     if (!importUrl.trim()) return;
 
     // Parse GitHub URL
-    const urlPattern = /^https?:\/\/(www\.)?github\.com\/([^\/]+)\/([^\/]+)(?:\/.*)?$/i;
+    const urlPattern = /^https?:\/\/(www\.)?github\.com\/([^/]+)\/([^/]+)(?:\/.*)?$/i;
     const match = importUrl.trim().match(urlPattern);
 
     if (!match) {
@@ -515,15 +474,6 @@ const Dashboard = () => {
             </li>
             <li>
               <button
-                onClick={() => { scrollToSection('deployments'); setShowSidebar(false); }}
-                className="w-full text-left flex items-center space-x-3 py-2 px-3 rounded-lg hover:bg-primary-50 hover:text-primary-600 transition-colors"
-              >
-                <FaRocket size={18} />
-                <span>Deployments</span>
-              </button>
-            </li>
-            <li>
-              <button
                 onClick={() => { scrollToSection('settings'); setShowSidebar(false); }}
                 className="w-full text-left flex items-center space-x-3 py-2 px-3 rounded-lg hover:bg-primary-50 hover:text-primary-600 transition-colors"
               >
@@ -544,120 +494,13 @@ const Dashboard = () => {
                     Welcome back, {user?.firstName || user?.name || "User"}! 👋
                   </h2>
                   <p className="text-gray-600 mb-4 md:mb-0">
-                    Ready to deploy your next project? You have {projects.length} project{projects.length !== 1 ? 's' : ''} and {deploymentStats.successful} successful deployment{deploymentStats.successful !== 1 ? 's' : ''}.
+                    Ready to deploy your next project? You have {Array.isArray(projects) ? projects.length : 0} project{Array.isArray(projects) && projects.length !== 1 ? 's' : ''} and {deploymentStats.successful} successful deployment{deploymentStats.successful !== 1 ? 's' : ''}.
                   </p>
-                </div>
-                <div className="flex gap-3">
-                  <button
-                    onClick={() => scrollToSection('repositories')}
-                    className="btn-primary-modern px-6 py-3"
-                  >
-                    Import Repository
-                  </button>
-                  <button
-                    onClick={() => scrollToSection('projects')}
-                    className="btn-secondary-modern px-6 py-3"
-                  >
-                    View Projects
-                  </button>
                 </div>
               </div>
             </div>
           </div>
 
-          {/* Overview Section */}
-          <section id="overview" className="mb-8">
-            <h3 className="text-xl font-semibold mb-4 text-gray-900 flex items-center space-x-2">
-              <FaGlobe className="text-primary-600" />
-              <span>Overview</span>
-            </h3>
-            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">
-              <motion.div
-                className="card-modern p-6 h-full hover:scale-105 transition-all duration-300 group"
-                whileHover={{ y: -5 }}
-                transition={{ duration: 0.2 }}
-              >
-                <div className="flex items-center space-x-3 mb-3">
-                  <div className={`w-12 h-12 rounded-2xl flex items-center justify-center text-xl shadow-lg group-hover:shadow-xl transition-all duration-300 ${githubConnected ? 'bg-gradient-to-br from-green-500 to-emerald-500 text-white' : checkingGithub ? 'bg-gradient-to-br from-yellow-500 to-orange-500 text-white' : 'bg-gradient-to-br from-red-500 to-pink-500 text-white'}`}>
-                    <FaGithub />
-                  </div>
-                  <h4 className="font-semibold text-gray-900">GitHub Status</h4>
-                </div>
-                <p className={`text-sm font-medium ${githubConnected ? 'text-green-700' : checkingGithub ? 'text-yellow-700' : 'text-red-700'}`}>
-                  {checkingGithub ? 'Checking...' : githubConnected ? 'Connected' : 'Not Connected'}
-                </p>
-                <div className="absolute top-0 right-0 w-20 h-20 bg-gradient-to-br from-primary-100 to-accent-100 rounded-full blur-3xl opacity-0 group-hover:opacity-50 transition-opacity duration-500"></div>
-              </motion.div>
-              <motion.div
-                className="card-modern p-6 h-full hover:scale-105 transition-all duration-300 group"
-                whileHover={{ y: -5 }}
-                transition={{ duration: 0.2 }}
-              >
-                <div className="flex items-center space-x-3 mb-3">
-                  <div className="w-12 h-12 bg-gradient-to-br from-primary-500 to-accent-500 rounded-2xl flex items-center justify-center text-xl text-white shadow-lg group-hover:shadow-xl transition-all duration-300">
-                    <FaCode />
-                  </div>
-                  <h4 className="font-semibold text-gray-900">Repositories</h4>
-                </div>
-                <p className="text-3xl font-bold bg-gradient-to-r from-primary-600 to-accent-600 bg-clip-text text-transparent">
-                  {loading ? '...' : repos.length}
-                </p>
-                <p className="text-sm text-gray-600">found</p>
-                <div className="absolute top-0 right-0 w-20 h-20 bg-gradient-to-br from-primary-100 to-accent-100 rounded-full blur-3xl opacity-0 group-hover:opacity-50 transition-opacity duration-500"></div>
-              </motion.div>
-              <motion.div
-                className="card-modern p-6 h-full hover:scale-105 transition-all duration-300 group"
-                whileHover={{ y: -5 }}
-                transition={{ duration: 0.2 }}
-              >
-                <div className="flex items-center space-x-3 mb-3">
-                  <div className="w-12 h-12 bg-gradient-to-br from-blue-500 to-cyan-500 rounded-2xl flex items-center justify-center text-xl text-white shadow-lg group-hover:shadow-xl transition-all duration-300">
-                    <FaRocket />
-                  </div>
-                  <h4 className="font-semibold text-gray-900">Deployments</h4>
-                </div>
-                <p className="text-3xl font-bold bg-gradient-to-r from-blue-600 to-cyan-600 bg-clip-text text-transparent">
-                  {deploymentStats.active}
-                </p>
-                <p className="text-sm text-gray-600">active</p>
-                <div className="absolute top-0 right-0 w-20 h-20 bg-gradient-to-br from-blue-100 to-cyan-100 rounded-full blur-3xl opacity-0 group-hover:opacity-50 transition-opacity duration-500"></div>
-              </motion.div>
-              <motion.div
-                className="card-modern p-6 h-full hover:scale-105 transition-all duration-300 group"
-                whileHover={{ y: -5 }}
-                transition={{ duration: 0.2 }}
-              >
-                <div className="flex items-center space-x-3 mb-3">
-                  <div className="w-12 h-12 bg-gradient-to-br from-green-500 to-emerald-500 rounded-2xl flex items-center justify-center text-xl text-white shadow-lg group-hover:shadow-xl transition-all duration-300">
-                    <FaRocket />
-                  </div>
-                  <h4 className="font-semibold text-gray-900">Success Rate</h4>
-                </div>
-                <p className="text-3xl font-bold bg-gradient-to-r from-green-600 to-emerald-600 bg-clip-text text-transparent">
-                  {deploymentStats.successRate}%
-                </p>
-                <p className="text-sm text-gray-600">success rate</p>
-                <div className="absolute top-0 right-0 w-20 h-20 bg-gradient-to-br from-green-100 to-emerald-100 rounded-full blur-3xl opacity-0 group-hover:opacity-50 transition-opacity duration-500"></div>
-              </motion.div>
-              <motion.div
-                className="card-modern p-6 h-full hover:scale-105 transition-all duration-300 group"
-                whileHover={{ y: -5 }}
-                transition={{ duration: 0.2 }}
-              >
-                <div className="flex items-center space-x-3 mb-3">
-                  <div className="w-12 h-12 bg-gradient-to-br from-purple-500 to-pink-500 rounded-2xl flex items-center justify-center text-xl text-white shadow-lg group-hover:shadow-xl transition-all duration-300">
-                    <FaServer />
-                  </div>
-                  <h4 className="font-semibold text-gray-900">Total Deploys</h4>
-                </div>
-                <p className="text-3xl font-bold bg-gradient-to-r from-purple-600 to-pink-600 bg-clip-text text-transparent">
-                  {deploymentStats.total}
-                </p>
-                <p className="text-sm text-gray-600">all time</p>
-                <div className="absolute top-0 right-0 w-20 h-20 bg-gradient-to-br from-purple-100 to-pink-100 rounded-full blur-3xl opacity-0 group-hover:opacity-50 transition-opacity duration-500"></div>
-              </motion.div>
-            </div>
-          </section>
 
           {/* Repositories Section */}
           <section id="repositories" className="mb-8">
@@ -735,11 +578,9 @@ const Dashboard = () => {
             ) : (
               <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
                 {repos.map((repo) => (
-                  <motion.div
+                  <div
                     key={repo.id}
-                    className="card-modern p-6 h-full hover:scale-105 transition-all duration-300 group overflow-hidden"
-                    whileHover={{ y: -5 }}
-                    transition={{ duration: 0.2 }}
+                    className="bg-white rounded-lg p-4 border border-gray-200 hover:border-primary-300 hover:shadow-md transition-all group"
                   >
                       <div className="flex items-center space-x-3 mb-3">
                         <FaGithub className="text-primary-600" size={20} />
@@ -762,7 +603,7 @@ const Dashboard = () => {
                           Import
                         </button>
                       </div>
-                  </motion.div>
+                  </div>
                 ))}
               </div>
             )}
@@ -787,7 +628,7 @@ const Dashboard = () => {
                   </div>
                 ))}
               </div>
-            ) : projects.length === 0 ? (
+            ) : !Array.isArray(projects) || projects.length === 0 ? (
               <div className="bg-white p-8 rounded-xl shadow-medium text-center border border-gray-200">
                 <FaRocket size={48} className="mx-auto mb-4 text-gray-300" />
                 <h3 className="text-xl font-semibold mb-2 text-gray-900">No Projects Yet</h3>
@@ -801,11 +642,9 @@ const Dashboard = () => {
             ) : (
               <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
                 {projects.map((project) => (
-                  <motion.div
+                  <div
                     key={project._id}
-                    className="card-modern p-6 h-full hover:scale-105 transition-all duration-300 group overflow-hidden"
-                    whileHover={{ y: -5 }}
-                    transition={{ duration: 0.2 }}
+                    className="bg-white rounded-lg p-4 border border-gray-200 hover:border-primary-300 hover:shadow-md transition-all group"
                   >
                       <div className="flex items-center justify-between mb-3">
                         <span className="font-semibold text-lg text-gray-900 truncate">{project.name}</span>
@@ -909,68 +748,12 @@ const Dashboard = () => {
                           </div>
                         </div>
                       )}
-                  </motion.div>
+                  </div>
                 ))}
               </div>
             )}
           </section>
 
-          {/* Deployment History Section */}
-          <section id="deployments" className="mb-8">
-            <h3 className="text-xl font-semibold mb-4 text-gray-900 flex items-center space-x-2">
-              <FaRocket className="text-primary-600" />
-              <span>Recent Deployments</span>
-            </h3>
-            <div className="card-modern p-6">
-              {deploymentsLoading ? (
-                <div className="space-y-4">
-                  {Array.from({ length: 3 }).map((_, i) => (
-                    <div key={i} className="animate-pulse">
-                      <div className="h-4 bg-gray-200 rounded w-3/4 mb-2"></div>
-                      <div className="h-3 bg-gray-200 rounded w-1/2"></div>
-                    </div>
-                  ))}
-                </div>
-              ) : recentDeployments.length === 0 ? (
-                <div className="text-center py-8">
-                  <FaRocket className="mx-auto mb-4 text-gray-300 text-4xl" />
-                  <p className="text-gray-500">No deployments yet</p>
-                  <p className="text-sm text-gray-400 mt-2">Your recent deployments will appear here</p>
-                </div>
-              ) : (
-                <div className="space-y-4">
-                  {recentDeployments.map((deployment) => (
-                    <div key={deployment._id} className="flex items-center justify-between p-4 border border-gray-100 rounded-lg hover:bg-gray-50 transition-colors">
-                      <div className="flex items-center space-x-4">
-                        <div className={`w-3 h-3 rounded-full ${
-                          deployment.status === 'success' ? 'bg-green-500' :
-                          deployment.status === 'failed' ? 'bg-red-500' :
-                          deployment.status === 'building' ? 'bg-yellow-500' :
-                          'bg-gray-400'
-                        }`}></div>
-                        <div>
-                          <p className="font-medium text-gray-900">{deployment.project?.name || 'Unknown Project'}</p>
-                          <p className="text-sm text-gray-500">
-                            {new Date(deployment.createdAt).toLocaleDateString()} at {new Date(deployment.createdAt).toLocaleTimeString()}
-                          </p>
-                        </div>
-                      </div>
-                      <div className="text-right">
-                        <span className={`px-2 py-1 text-xs font-medium rounded-full ${
-                          deployment.status === 'success' ? 'bg-green-100 text-green-800' :
-                          deployment.status === 'failed' ? 'bg-red-100 text-red-800' :
-                          deployment.status === 'building' ? 'bg-yellow-100 text-yellow-800' :
-                          'bg-gray-100 text-gray-800'
-                        }`}>
-                          {deployment.status}
-                        </span>
-                      </div>
-                    </div>
-                  ))}
-                </div>
-              )}
-            </div>
-          </section>
 
           {/* Settings Section */}
           <section id="settings" className="mb-8">
@@ -995,7 +778,7 @@ const Dashboard = () => {
                   <h4 className="font-semibold text-gray-900 mb-3">Deployment Preferences</h4>
                   <p className="text-gray-600 mb-4">Configure default build settings and notifications.</p>
                   <div className="space-y-2">
-                    {projects.length > 0 ? (
+                    {Array.isArray(projects) && projects.length > 0 ? (
                       projects.map((project) => (
                         <button
                           key={project._id}
