@@ -31,17 +31,18 @@ router.post('/', authenticateToken, async (req, res) => {
       });
     }
 
-    // Check if project with same repository already exists for this user
+    // Check if project with same repository already exists for this user (only active projects)
     console.log('Checking for existing project...');
     console.log('User ID:', req.user._id);
     console.log('Repository URL:', repositoryUrl);
 
     const existingProject = await Project.findOne({
       owner: req.user._id,
-      repositoryUrl: repositoryUrl
+      repositoryUrl: repositoryUrl,
+      status: 'active'  // Only check active projects
     });
 
-    console.log('Existing project found:', !!existingProject);
+    console.log('Existing active project found:', !!existingProject);
 
     if (existingProject) {
       console.log('Existing project details:', existingProject.name, existingProject.status);
