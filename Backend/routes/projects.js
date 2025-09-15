@@ -62,24 +62,35 @@ router.post('/', authenticateToken, async (req, res) => {
     }
 
     // Include repository owner in normalized name for uniqueness
-    const normalizedName = `${baseNormalized}-${repositoryOwner.toLowerCase()}`;
+    let normalizedName = `${baseNormalized}-${repositoryOwner.toLowerCase()}`;
+
+    // Check if normalized name conflicts with existing projects (any status)
+    const existingNormalized = await Project.findOne({
+      subdomain: normalizedName
+    });
+
+    // If subdomain exists (even inactive), append timestamp to make it unique
+    if (existingNormalized) {
+      const timestamp = Date.now().toString().slice(-6); // Last 6 digits of timestamp
+      normalizedName = `${baseNormalized}-${repositoryOwner.toLowerCase()}-${timestamp}`;
+
+      // Double-check the new subdomain doesn't conflict
+      const existingWithTimestamp = await Project.findOne({
+        subdomain: normalizedName
+      });
+
+      if (existingWithTimestamp) {
+        return res.status(400).json({
+          success: false,
+          message: 'Unable to generate unique subdomain. Please try a different project name.'
+        });
+      }
+    }
+
     if (normalizedName.length > 63) {
       return res.status(400).json({
         success: false,
-        message: 'Project name combined with owner is too long. Subdomain cannot exceed 63 characters.'
-      });
-    }
-
-    // Check if normalized name conflicts with existing projects
-    const existingNormalized = await Project.findOne({
-      subdomain: normalizedName,
-      status: 'active'
-    });
-
-    if (existingNormalized) {
-      return res.status(400).json({
-        success: false,
-        message: 'A project with a similar name and owner already exists that would create the same subdomain.'
+        message: 'Generated subdomain is too long. Please use a shorter project name.'
       });
     }
 
