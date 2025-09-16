@@ -108,19 +108,27 @@ router.get('/stats', authenticateToken, async (req, res) => {
 // @access  Private
 router.get('/:id', authenticateToken, async (req, res) => {
   try {
+    console.log('Fetching deployment:', req.params.id);
+    console.log('User ID:', req.user._id);
+
     const deployment = await Deployment.findById(req.params.id)
       .populate('project', 'name repositoryName repositoryOwner owner')
       .populate('triggeredBy', 'username firstName lastName');
 
     if (!deployment) {
+      console.log('Deployment not found');
       return res.status(404).json({
         success: false,
         message: 'Deployment not found'
       });
     }
 
+    console.log('Deployment project owner:', deployment.project?.owner);
+    console.log('User owns project?', deployment.project?.owner?.toString() === req.user._id.toString());
+
     // Check if user owns the project
-    if (deployment.project.owner.toString() !== req.user._id) {
+    if (deployment.project.owner.toString() !== req.user._id.toString()) {
+      console.log('Access denied: User does not own the project');
       return res.status(403).json({
         success: false,
         message: 'Access denied'
@@ -206,7 +214,7 @@ router.put('/:id/status', authenticateToken, async (req, res) => {
     }
 
     // Check if user owns the project
-    if (deployment.project.owner.toString() !== req.user._id) {
+    if (deployment.project.owner.toString() !== req.user._id.toString()) {
       return res.status(403).json({
         success: false,
         message: 'Access denied'
@@ -257,7 +265,7 @@ router.post('/:id/logs', authenticateToken, async (req, res) => {
     }
 
     // Check if user owns the project
-    if (deployment.project.owner.toString() !== req.user._id) {
+    if (deployment.project.owner.toString() !== req.user._id.toString()) {
       return res.status(403).json({
         success: false,
         message: 'Access denied'
@@ -296,7 +304,7 @@ router.delete('/:id', authenticateToken, async (req, res) => {
     }
 
     // Check if user owns the project
-    if (deployment.project.owner.toString() !== req.user._id) {
+    if (deployment.project.owner.toString() !== req.user._id.toString()) {
       return res.status(403).json({
         success: false,
         message: 'Access denied'

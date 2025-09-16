@@ -8,10 +8,14 @@ const authenticateToken = async (req, res, next) => {
     const authHeader = req.headers['authorization'];
     const token = authHeader && authHeader.split(' ')[1]; // Bearer TOKEN
 
+    console.log('Auth middleware - Token present:', !!token);
+    console.log('Auth header:', authHeader ? authHeader.substring(0, 20) + '...' : 'none');
+
     if (!token) {
-      return res.status(401).json({ 
-        success: false, 
-        message: 'Access token is required' 
+      console.log('No token provided');
+      return res.status(401).json({
+        success: false,
+        message: 'Access token is required'
       });
     }
 
