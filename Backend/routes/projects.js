@@ -113,6 +113,28 @@ router.post('/', authenticateToken, async (req, res) => {
 
     await project.save();
 
+    // Create GitHub webhook for automatic deployments
+    try {
+      const user = await User.findById(req.user._id);
+      if (user && user.accessToken) {
+        const webhookUrl = `${process.env.BASE_URL || 'http://localhost:5000'}/api/github/webhook`;
+        const secret = process.env.GITHUB_WEBHOOK_SECRET || 'default-secret';
+
+        const webhook = await githubService.createWebhook(
+          repositoryOwner,
+          repositoryName,
+          user.accessToken,
+          webhookUrl,
+          secret
+        );
+
+        console.log('GitHub webhook created:', webhook);
+      }
+    } catch (webhookError) {
+      console.error('Failed to create webhook:', webhookError);
+      // Don't fail project creation if webhook creation fails
+    }
+
     res.status(201).json({
       success: true,
       message: 'Project created successfully',

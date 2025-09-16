@@ -1,8 +1,12 @@
 const express = require('express');
 const axios = require('axios');
+const crypto = require('crypto');
 const { authenticateToken } = require('../middleware/auth');
 const User = require('../models/User');
+const Project = require('../models/Project');
+const Deployment = require('../models/Deployment');
 const githubService = require('../services/githubService');
+const deploymentService = require('../services/deploymentService');
 
 const router = express.Router();
 
@@ -307,5 +311,94 @@ router.get('/user', authenticateToken, async (req, res) => {
     });
   }
 });
+// @route   POST /api/github/webhook
+// @desc    Handle GitHub webhooks for automatic deployments
+// @access  Public (but verified with signature)
+router.post('/webhook', async (req, res) => {
+  try {
+    const signature = req.headers['x-hub-signature-256'];
+    const event = req.headers['x-github-event'];
+    const payload = JSON.stringify(req.body);
+
+    // Verify webhook signature (implement signature verification)
+    if (!verifyWebhookSignature(payload, signature)) {
+      return res.status(401).json({
+        success: false,
+        message: 'Invalid webhook signature'
+      });
+    }
+
+    if (event === 'push') {
+      const { repository, ref, commits } = req.body;
+
+      // Only trigger on main/master branch pushes
+      if (ref === `refs/heads/${repository.default_branch}`) {
+        // Find projects that use this repository
+        const projects = await Project.find({
+          repositoryUrl: repository.clone_url,
+          branch: repository.default_branch
+        });
+
+        for (const project of projects) {
+          try {
+            // Check if there's already an ongoing deployment for this project
+            const existingDeployment = await Deployment.findOne({
+              project: project._id,
+              status: { $in: ['pending', 'building'] }
+            });
+
+            if (existingDeployment) {
+              console.log(`Skipping deployment for project ${project.name} - deployment already in progress`);
+              continue;
+            }
+
+            // Create new deployment
+            const deployment = new Deployment({
+              project: project._id,
+              status: 'pending',
+              buildLogs: []
+            });
+            await deployment.save();
+
+            // Update project's last deployment
+            project.lastDeployment = deployment._id;
+            await project.save();
+
+            // Trigger deployment asynchronously
+            deploymentService.executeDeployment(deployment._id);
+
+            console.log(`Triggered deployment for project: ${project.name}`);
+          } catch (error) {
+            console.error(`Failed to trigger deployment for project ${project.name}:`, error);
+          }
+        }
+      }
+    }
+
+    res.status(200).json({ success: true, message: 'Webhook processed' });
+  } catch (error) {
+    console.error('Webhook error:', error);
+    res.status(500).json({
+      success: false,
+      message: 'Webhook processing failed',
+      error: process.env.NODE_ENV === 'development' ? error.message : undefined
+    });
+  }
+});
+
+// Helper function to verify webhook signature
+function verifyWebhookSignature(payload, signature) {
+  const secret = process.env.GITHUB_WEBHOOK_SECRET;
+  if (!secret) {
+    console.warn('GITHUB_WEBHOOK_SECRET not set, skipping signature verification');
+    return true;
+  }
+
+  const hmac = crypto.createHmac('sha256', secret);
+  hmac.update(payload, 'utf8');
+  const expectedSignature = `sha256=${hmac.digest('hex')}`;
+
+  return crypto.timingSafeEqual(Buffer.from(signature), Buffer.from(expectedSignature));
+}
 
 module.exports = router;

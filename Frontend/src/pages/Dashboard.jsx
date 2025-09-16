@@ -6,7 +6,8 @@ import { apiService } from "../services/apiService";
 import ProjectImportModal from "../components/ui/ProjectImportModal";
 import EditProfileModal from "../components/ui/EditProfileModal";
 import BuildSettingsModal from "../components/ui/BuildSettingsModal";
-import { FaGithub, FaCode, FaRocket, FaUser, FaBars, FaTimes, FaGlobe, FaServer, FaCog, FaTrash, FaEdit, FaCogs } from 'react-icons/fa';
+import DeploymentLogsModal from "../components/ui/DeploymentLogsModal";
+import { FaGithub, FaCode, FaRocket, FaUser, FaBars, FaTimes, FaGlobe, FaServer, FaCog, FaTrash, FaEdit, FaCogs, FaFileAlt } from 'react-icons/fa';
 
 const Dashboard = () => {
   const { user, token, logout } = useAuth();
@@ -27,6 +28,9 @@ const Dashboard = () => {
   const [editProfileModalOpen, setEditProfileModalOpen] = useState(false);
   const [buildSettingsModalOpen, setBuildSettingsModalOpen] = useState(false);
   const [selectedProjectForSettings, setSelectedProjectForSettings] = useState(null);
+  const [logsModalOpen, setLogsModalOpen] = useState(false);
+  const [selectedDeploymentForLogs, setSelectedDeploymentForLogs] = useState(null);
+  const [selectedProjectForLogs, setSelectedProjectForLogs] = useState(null);
   const [deploymentStats, setDeploymentStats] = useState({
     total: 0,
     active: 0,
@@ -342,6 +346,20 @@ const Dashboard = () => {
       )
     );
     showSuccess('Build settings updated successfully!');
+  };
+
+  // Handle view deployment logs
+  const handleViewLogs = (project, deployment) => {
+    setSelectedDeploymentForLogs(deployment._id);
+    setSelectedProjectForLogs(project.name);
+    setLogsModalOpen(true);
+  };
+
+  // Handle close logs modal
+  const handleCloseLogsModal = () => {
+    setLogsModalOpen(false);
+    setSelectedDeploymentForLogs(null);
+    setSelectedProjectForLogs(null);
   };
 
 
@@ -688,6 +706,13 @@ const Dashboard = () => {
                           </div>
                           <div className="flex gap-2 mt-3">
                             <button
+                              onClick={() => handleViewLogs(project, project.lastDeployment)}
+                              className="bg-blue-500 hover:bg-blue-600 text-white py-2 px-4 rounded-lg font-semibold transition-colors flex items-center justify-center shadow-medium hover:shadow-glow"
+                              title="View deployment logs"
+                            >
+                              <FaFileAlt size={16} />
+                            </button>
+                            <button
                               onClick={() => handleDeleteProject(project._id)}
                               className="bg-red-500 hover:bg-red-600 text-white py-2 px-4 rounded-lg font-semibold transition-colors flex items-center justify-center shadow-medium hover:shadow-glow"
                             >
@@ -728,6 +753,15 @@ const Dashboard = () => {
                                 </>
                               )}
                             </button>
+                            {project.lastDeployment && (
+                              <button
+                                onClick={() => handleViewLogs(project, project.lastDeployment)}
+                                className="bg-blue-500 hover:bg-blue-600 text-white py-2 px-4 rounded-lg font-semibold transition-colors flex items-center justify-center shadow-medium hover:shadow-glow"
+                                title="View deployment logs"
+                              >
+                                <FaFileAlt size={16} />
+                              </button>
+                            )}
                             <button
                               onClick={() => handleDeleteProject(project._id)}
                               className="bg-red-500 hover:bg-red-600 text-white py-2 px-4 rounded-lg font-semibold transition-colors flex items-center justify-center shadow-medium hover:shadow-glow"
@@ -747,6 +781,15 @@ const Dashboard = () => {
                               <FaRocket />
                               <span>Deploy Now</span>
                             </button>
+                            {project.lastDeployment && (
+                              <button
+                                onClick={() => handleViewLogs(project, project.lastDeployment)}
+                                className="bg-blue-500 hover:bg-blue-600 text-white py-2 px-4 rounded-lg font-semibold transition-colors flex items-center justify-center shadow-medium hover:shadow-glow"
+                                title="View deployment logs"
+                              >
+                                <FaFileAlt size={16} />
+                              </button>
+                            )}
                             <button
                               onClick={() => handleDeleteProject(project._id)}
                               className="bg-red-500 hover:bg-red-600 text-white py-2 px-4 rounded-lg font-semibold transition-colors flex items-center justify-center shadow-medium hover:shadow-glow"
@@ -840,6 +883,14 @@ const Dashboard = () => {
         onClose={() => setBuildSettingsModalOpen(false)}
         project={selectedProjectForSettings}
         onSettingsUpdate={handleSettingsUpdate}
+      />
+
+      {/* Deployment Logs Modal */}
+      <DeploymentLogsModal
+        isOpen={logsModalOpen}
+        onClose={handleCloseLogsModal}
+        deploymentId={selectedDeploymentForLogs}
+        projectName={selectedProjectForLogs}
       />
     </div>
   );

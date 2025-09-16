@@ -193,6 +193,70 @@ class GitHubService {
       throw new Error('Invalid GitHub access token');
     }
   }
+
+  /**
+   * Create webhook for repository
+   * @param {string} owner - Repository owner
+   * @param {string} repo - Repository name
+   * @param {string} accessToken - GitHub OAuth access token
+   * @param {string} webhookUrl - URL for webhook
+   * @param {string} secret - Webhook secret
+   * @returns {Promise<Object>} Webhook details
+   */
+  async createWebhook(owner, repo, accessToken, webhookUrl, secret) {
+    try {
+      const response = await axios.post(`${this.baseURL}/repos/${owner}/${repo}/hooks`, {
+        name: 'web',
+        active: true,
+        events: ['push'],
+        config: {
+          url: webhookUrl,
+          content_type: 'json',
+          secret: secret
+        }
+      }, {
+        headers: {
+          'Authorization': `token ${accessToken}`,
+          'Accept': 'application/vnd.github.v3+json',
+          'User-Agent': 'DeployEase-App'
+        }
+      });
+
+      return {
+        id: response.data.id,
+        url: response.data.url,
+        active: response.data.active
+      };
+    } catch (error) {
+      console.error('Error creating webhook:', error.response?.data || error.message);
+      throw new Error('Failed to create webhook');
+    }
+  }
+
+  /**
+   * Delete webhook
+   * @param {string} owner - Repository owner
+   * @param {string} repo - Repository name
+   * @param {number} hookId - Webhook ID
+   * @param {string} accessToken - GitHub OAuth access token
+   * @returns {Promise<boolean>} Success status
+   */
+  async deleteWebhook(owner, repo, hookId, accessToken) {
+    try {
+      await axios.delete(`${this.baseURL}/repos/${owner}/${repo}/hooks/${hookId}`, {
+        headers: {
+          'Authorization': `token ${accessToken}`,
+          'Accept': 'application/vnd.github.v3+json',
+          'User-Agent': 'DeployEase-App'
+        }
+      });
+
+      return true;
+    } catch (error) {
+      console.error('Error deleting webhook:', error.response?.data || error.message);
+      throw new Error('Failed to delete webhook');
+    }
+  }
 }
 
 module.exports = new GitHubService();
