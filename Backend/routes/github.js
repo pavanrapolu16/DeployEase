@@ -401,7 +401,7 @@ router.post('/webhook', async (req, res) => {
             const deployment = new Deployment({
               project: project._id,
               status: 'pending',
-              buildLogs: []
+              buildLogs: [`[${new Date().toISOString()}] Deployment triggered by GitHub webhook (push to ${repository.default_branch})`]
             });
             await deployment.save();
 

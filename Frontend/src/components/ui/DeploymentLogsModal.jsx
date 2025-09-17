@@ -1,11 +1,13 @@
 import { useState, useEffect } from 'react';
 import { FaTimes, FaClock, FaInfo, FaExclamationTriangle, FaCheckCircle, FaTimesCircle } from 'react-icons/fa';
 import { apiService } from '../../services/apiService';
+import { useAuth } from '../../contexts/AuthContext';
 
 const DeploymentLogsModal = ({ isOpen, onClose, deploymentId, projectName }) => {
   const [logs, setLogs] = useState([]);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState(null);
+  const { user } = useAuth();
 
   useEffect(() => {
     if (isOpen && deploymentId) {
@@ -77,100 +79,106 @@ const DeploymentLogsModal = ({ isOpen, onClose, deploymentId, projectName }) => 
     }
   };
 
+  const getTerminalColor = (level) => {
+    switch (level) {
+      case 'error':
+        return 'text-red-400';
+      case 'warn':
+        return 'text-yellow-400';
+      case 'success':
+        return 'text-green-400';
+      case 'info':
+        return 'text-blue-400';
+      default:
+        return 'text-gray-300';
+    }
+  };
+
   if (!isOpen) return null;
 
   return (
-    <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50 p-4">
-      <div className="bg-white rounded-xl shadow-2xl max-w-4xl w-full max-h-[80vh] overflow-hidden">
-        {/* Header */}
-        <div className="flex items-center justify-between p-6 border-b border-gray-200">
-          <div>
-            <h2 className="text-xl font-bold text-gray-900">
-              Deployment Logs
-            </h2>
-            <p className="text-sm text-gray-600 mt-1">
-              {projectName && `Project: ${projectName}`}
-            </p>
+    <div className="fixed inset-0 bg-black/80 flex items-center justify-center z-50 p-4">
+      <div className="bg-gray-900 rounded-lg shadow-2xl max-w-6xl w-full max-h-[85vh] overflow-hidden border border-gray-700">
+        {/* Terminal Header */}
+        <div className="flex items-center justify-between px-4 py-3 bg-gray-800 border-b border-gray-700">
+          <div className="flex items-center space-x-2">
+            <div className="flex space-x-2">
+              <div className="w-3 h-3 bg-red-500 rounded-full"></div>
+              <div className="w-3 h-3 bg-yellow-500 rounded-full"></div>
+              <div className="w-3 h-3 bg-green-500 rounded-full"></div>
+            </div>
+            <span className="text-gray-300 text-sm font-mono ml-4">
+              {user?.username || user?.email?.split('@')[0] || 'user'}@deployease:~/{projectName || 'project'}/logs
+            </span>
           </div>
           <button
             onClick={onClose}
-            className="p-2 hover:bg-gray-100 rounded-lg transition-colors"
+            className="text-gray-400 hover:text-white transition-colors"
           >
-            <FaTimes className="text-gray-500" size={20} />
+            <FaTimes size={16} />
           </button>
         </div>
 
-        {/* Content */}
-        <div className="p-6 overflow-y-auto max-h-[60vh]">
+        {/* Terminal Content */}
+        <div className="p-4 bg-black min-h-[400px] max-h-[65vh] overflow-y-auto font-mono text-sm">
           {loading ? (
-            <div className="flex items-center justify-center py-12">
-              <div className="flex items-center space-x-3">
-                <div className="w-6 h-6 border-2 border-primary-500 border-t-transparent rounded-full animate-spin"></div>
-                <span className="text-gray-600">Loading logs...</span>
+            <div className="text-green-400">
+              <div className="flex items-center space-x-2">
+                <span>$</span>
+                <span className="animate-pulse">Loading deployment logs...</span>
+                <span className="animate-pulse">_</span>
               </div>
             </div>
           ) : error ? (
-            <div className="text-center py-12">
-              <FaTimesCircle className="mx-auto text-red-500 mb-4" size={48} />
-              <h3 className="text-lg font-semibold text-gray-900 mb-2">Error Loading Logs</h3>
-              <p className="text-gray-600">{error}</p>
+            <div className="text-red-400">
+              <div className="mb-2">Error: {error}</div>
+              <div className="text-gray-500">$ _</div>
             </div>
           ) : logs.length === 0 ? (
-            <div className="text-center py-12">
-              <FaInfo className="mx-auto text-gray-400 mb-4" size={48} />
-              <h3 className="text-lg font-semibold text-gray-900 mb-2">No Logs Available</h3>
-              <p className="text-gray-600">Deployment logs will appear here once the build process starts.</p>
+            <div className="text-gray-500">
+              <div className="mb-2">No deployment logs available yet.</div>
+              <div className="mb-2">Waiting for deployment to start...</div>
+              <div className="animate-pulse">$ _</div>
             </div>
           ) : (
-            <div className="space-y-3">
+            <div className="space-y-1">
               {logs.map((log, index) => (
-                <div
-                  key={index}
-                  className={`p-4 rounded-lg border ${getLogColor(log.level)}`}
-                >
-                  <div className="flex items-start space-x-3">
-                    <div className="flex-shrink-0 mt-0.5">
-                      {getLogIcon(log.level)}
-                    </div>
-                    <div className="flex-1 min-w-0">
-                      <div className="flex items-center space-x-2 mb-2">
-                        <span className="text-xs font-medium uppercase tracking-wide">
-                          {log.level}
-                        </span>
-                        <div className="flex items-center space-x-1 text-xs text-gray-500">
-                          <FaClock size={10} />
-                          <span>{formatTimestamp(log.timestamp)}</span>
-                        </div>
-                      </div>
-                      <div className="text-sm whitespace-pre-wrap break-words">
-                        {log.message}
-                      </div>
-                    </div>
-                  </div>
+                <div key={index} className="text-gray-300">
+                  <span className="text-green-400">$</span>
+                  <span className="text-blue-400 ml-2">
+                    [{formatTimestamp(log.timestamp)}]
+                  </span>
+                  <span className={`ml-2 ${getTerminalColor(log.level)}`}>
+                    {log.message}
+                  </span>
                 </div>
               ))}
+              <div className="text-gray-500 animate-pulse">
+                <span className="text-green-400">$</span>
+                <span className="ml-2">_</span>
+              </div>
             </div>
           )}
         </div>
 
-        {/* Footer */}
-        <div className="flex items-center justify-between p-6 border-t border-gray-200 bg-gray-50">
-          <div className="text-sm text-gray-600">
-            {logs.length} log{logs.length !== 1 ? 's' : ''} total
+        {/* Terminal Footer */}
+        <div className="flex items-center justify-between px-4 py-3 bg-gray-800 border-t border-gray-700">
+          <div className="text-gray-400 text-xs font-mono">
+            {logs.length} lines | Status: {loading ? 'Loading...' : error ? 'Error' : 'Active'}
           </div>
-          <div className="flex space-x-3">
+          <div className="flex space-x-2">
             <button
               onClick={fetchLogs}
               disabled={loading}
-              className="px-4 py-2 bg-primary-600 text-white rounded-lg hover:bg-primary-700 transition-colors disabled:opacity-50 disabled:cursor-not-allowed text-sm font-medium"
+              className="px-3 py-1 bg-gray-700 text-gray-300 rounded hover:bg-gray-600 transition-colors disabled:opacity-50 text-xs font-mono"
             >
-              {loading ? 'Refreshing...' : 'Refresh Logs'}
+              {loading ? '⟳' : '↻'} Refresh
             </button>
             <button
               onClick={onClose}
-              className="px-4 py-2 bg-gray-200 text-gray-700 rounded-lg hover:bg-gray-300 transition-colors text-sm font-medium"
+              className="px-3 py-1 bg-gray-700 text-gray-300 rounded hover:bg-gray-600 transition-colors text-xs font-mono"
             >
-              Close
+              ✕ Close
             </button>
           </div>
         </div>
