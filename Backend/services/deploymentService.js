@@ -192,8 +192,8 @@ class DeploymentService {
       // Detect Vite
       if (devDeps.vite) {
         project.outputDir = 'dist';
-        project.buildCommand = 'npm run build';
-        await deployment.addLog('info', '✅ Detected Vite framework, using output dir: dist, build command: npm run build');
+        project.buildCommand = 'npx vite build';
+        await deployment.addLog('info', '✅ Detected Vite framework, using output dir: dist, build command: npx vite build');
       }
       // Detect Create React App
       else if (devDeps['react-scripts']) {
@@ -256,14 +256,17 @@ class DeploymentService {
         .then(() => {
           deployment.addLog('info', 'Installing dependencies...');
 
-          exec('npm install', { cwd: deploymentDir }, async (error, stdout, stderr) => {
+          // Force install devDependencies by setting NODE_ENV=development
+          const env = { ...process.env, NODE_ENV: 'development' };
+
+          exec('npm install', { cwd: deploymentDir, env }, async (error, stdout, stderr) => {
             if (error) {
               await deployment.addLog('error', `npm install failed: ${stderr}`);
               reject(new Error(`Failed to install dependencies: ${error.message}`));
               return;
             }
 
-            await deployment.addLog('info', 'Dependencies installed successfully');
+            await deployment.addLog('info', '✅ Dependencies installed successfully');
             resolve();
           });
         })
