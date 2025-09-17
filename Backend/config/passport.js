@@ -64,7 +64,7 @@ if (process.env.GITHUB_CLIENT_ID && process.env.GITHUB_CLIENT_SECRET) {
     clientID: process.env.GITHUB_CLIENT_ID,
     clientSecret: process.env.GITHUB_CLIENT_SECRET,
     callbackURL: "/api/oauth/github/callback",
-    scope: ['user:email', 'repo', 'admin:repo_hook'] // Request email and full repo access
+    scope: ['user:email', 'repo'] // Request email and repo access for webhooks
   }, async (accessToken, refreshToken, profile, done) => {
     try {
       console.log('GitHub OAuth Profile:', {

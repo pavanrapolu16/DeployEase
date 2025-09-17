@@ -203,6 +203,7 @@ class GitHubService {
    */
   async checkRepoAdminAccess(owner, repo, accessToken) {
     try {
+      console.log(`🔍 Checking admin access for ${owner}/${repo}`);
       const response = await axios.get(`${this.baseURL}/repos/${owner}/${repo}`, {
         headers: {
           'Authorization': `token ${accessToken}`,
@@ -213,9 +214,15 @@ class GitHubService {
 
       // Check if user has admin permission
       const permissions = response.data.permissions || {};
-      return permissions.admin === true;
+      console.log(`✅ Repo permissions for ${owner}/${repo}:`, permissions);
+      const hasAdmin = permissions.admin === true;
+      console.log(`Admin access for ${owner}/${repo}: ${hasAdmin}`);
+      return hasAdmin;
     } catch (error) {
-      console.error('Error checking repo permissions:', error.response?.data || error.message);
+      console.error(`❌ Error checking repo permissions for ${owner}/${repo}:`, {
+        status: error.response?.status,
+        data: error.response?.data
+      });
       return false;
     }
   }
