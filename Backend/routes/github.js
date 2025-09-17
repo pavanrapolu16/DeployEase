@@ -349,6 +349,7 @@ router.post('/webhook', async (req, res) => {
 
       console.log('Processing push event:', {
         repository: repository.full_name,
+        cloneUrl: repository.clone_url,
         ref,
         defaultBranch: repository.default_branch,
         commitsCount: commits?.length || 0
@@ -359,12 +360,29 @@ router.post('/webhook', async (req, res) => {
         console.log('Push is to default branch, looking for matching projects...');
 
         // Find projects that use this repository
-        const projects = await Project.find({
-          repositoryUrl: repository.clone_url,
-          branch: repository.default_branch
-        });
+        // Try both with and without .git suffix to handle URL format differences
+        const cloneUrl = repository.clone_url;
+        const cloneUrlWithoutGit = cloneUrl.replace(/\.git$/, '');
 
-        console.log(`Found ${projects.length} matching projects:`, projects.map(p => p.name));
+        const searchCriteria1 = {
+          repositoryUrl: cloneUrl,
+          branch: repository.default_branch
+        };
+
+        const searchCriteria2 = {
+          repositoryUrl: cloneUrlWithoutGit,
+          branch: repository.default_branch
+        };
+
+        console.log('Searching for projects with criteria 1:', searchCriteria1);
+        console.log('Searching for projects with criteria 2:', searchCriteria2);
+
+        let projects = await Project.find(searchCriteria1);
+        if (projects.length === 0) {
+          projects = await Project.find(searchCriteria2);
+        }
+
+        console.log(`Found ${projects.length} matching projects:`, projects.map(p => ({ name: p.name, repositoryUrl: p.repositoryUrl })));
 
         for (const project of projects) {
           try {
