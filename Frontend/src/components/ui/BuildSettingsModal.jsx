@@ -141,6 +141,22 @@ const BuildSettingsModal = ({ isOpen, onClose, project, onSettingsUpdate }) => {
                       </div>
                       <div className="flex items-center">
                         <input
+                          id="react"
+                          name="projectType"
+                          type="radio"
+                          value="react"
+                          checked={formData.projectType === 'react'}
+                          onChange={handleInputChange}
+                          className="h-4 w-4 text-primary-600 focus:ring-primary-500 border-gray-300"
+                          disabled={loading}
+                        />
+                        <label htmlFor="react" className="ml-3 block text-sm">
+                          <span className="font-medium text-gray-900">React Application</span>
+                          <span className="block text-gray-500">React app with build process (Vite, CRA, Next.js)</span>
+                        </label>
+                      </div>
+                      <div className="flex items-center">
+                        <input
                           id="static"
                           name="projectType"
                           type="radio"

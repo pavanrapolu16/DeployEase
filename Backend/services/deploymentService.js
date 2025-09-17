@@ -44,6 +44,11 @@ class DeploymentService {
       // Clone repository
       await this.cloneRepository(project, deploymentDir, deployment);
 
+      // Detect framework and set build settings for non-static projects
+      if (project.projectType !== 'static') {
+        await this.detectFramework(project, deploymentDir, deployment);
+      }
+
       // Install dependencies (skip for static projects)
       if (project.projectType !== 'static') {
         await this.installDependencies(project, deploymentDir, deployment);
@@ -118,6 +123,65 @@ class DeploymentService {
         resolve();
       });
     });
+  }
+
+  /**
+   * Detect framework and set build settings
+   */
+  async detectFramework(project, deploymentDir, deployment) {
+    try {
+      const packageJsonPath = path.join(deploymentDir, 'package.json');
+      const packageJson = JSON.parse(await fs.readFile(packageJsonPath, 'utf8'));
+
+      const devDeps = packageJson.devDependencies || {};
+      const deps = packageJson.dependencies || {};
+
+      // Detect Vite
+      if (devDeps.vite) {
+        if (!project.outputDir || project.outputDir === 'dist') {
+          project.outputDir = 'dist';
+        }
+        if (!project.buildCommand || project.buildCommand === 'npm run build') {
+          project.buildCommand = 'npm run build';
+        }
+        await deployment.addLog('info', 'Detected Vite framework, using output dir: dist');
+      }
+      // Detect Create React App
+      else if (devDeps['react-scripts']) {
+        if (!project.outputDir || project.outputDir === 'dist') {
+          project.outputDir = 'build';
+        }
+        if (!project.buildCommand || project.buildCommand === 'npm run build') {
+          project.buildCommand = 'npm run build';
+        }
+        await deployment.addLog('info', 'Detected Create React App, using output dir: build');
+      }
+      // Detect Next.js
+      else if (deps.next) {
+        if (!project.outputDir || project.outputDir === 'dist') {
+          project.outputDir = '.next';
+        }
+        if (!project.buildCommand || project.buildCommand === 'npm run build') {
+          project.buildCommand = 'npm run build';
+        }
+        await deployment.addLog('info', 'Detected Next.js, using output dir: .next');
+      }
+      // Default for React
+      else if (deps.react) {
+        if (!project.outputDir) {
+          project.outputDir = 'build';
+        }
+        if (!project.buildCommand) {
+          project.buildCommand = 'npm run build';
+        }
+        await deployment.addLog('info', 'Detected React project, using default settings');
+      }
+      else {
+        await deployment.addLog('info', 'No specific framework detected, using project defaults');
+      }
+    } catch (error) {
+      await deployment.addLog('info', 'Could not detect framework, using project defaults');
+    }
   }
 
   /**

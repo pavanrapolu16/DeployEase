@@ -669,10 +669,14 @@ const Dashboard = () => {
                         <span className={`px-2 py-1 text-xs font-medium rounded-full ${
                           project.projectType === 'static'
                             ? 'bg-green-100 text-green-800'
+                            : project.projectType === 'react'
+                            ? 'bg-cyan-100 text-cyan-800'
                             : 'bg-blue-100 text-blue-800'
                         }`}>
                           {project.projectType === 'static' ? (
                             <><FaGlobe className="inline mr-1" size={10} />Static</>
+                          ) : project.projectType === 'react' ? (
+                            <><FaCode className="inline mr-1" size={10} />React</>
                           ) : (
                             <><FaServer className="inline mr-1" size={10} />Node.js</>
                           )}

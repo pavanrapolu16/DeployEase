@@ -320,24 +320,46 @@ router.post('/webhook', async (req, res) => {
     const event = req.headers['x-github-event'];
     const payload = JSON.stringify(req.body);
 
+    console.log('Webhook received:', {
+      event,
+      signature: signature ? 'present' : 'missing',
+      hasBody: !!req.body,
+      repository: req.body?.repository?.full_name,
+      ref: req.body?.ref
+    });
+
     // Verify webhook signature (implement signature verification)
     if (!verifyWebhookSignature(payload, signature)) {
+      console.log('Webhook signature verification failed');
       return res.status(401).json({
         success: false,
         message: 'Invalid webhook signature'
       });
     }
 
+    console.log('Webhook signature verified successfully');
+
     if (event === 'push') {
       const { repository, ref, commits } = req.body;
 
+      console.log('Processing push event:', {
+        repository: repository.full_name,
+        ref,
+        defaultBranch: repository.default_branch,
+        commitsCount: commits?.length || 0
+      });
+
       // Only trigger on main/master branch pushes
       if (ref === `refs/heads/${repository.default_branch}`) {
+        console.log('Push is to default branch, looking for matching projects...');
+
         // Find projects that use this repository
         const projects = await Project.find({
           repositoryUrl: repository.clone_url,
           branch: repository.default_branch
         });
+
+        console.log(`Found ${projects.length} matching projects:`, projects.map(p => p.name));
 
         for (const project of projects) {
           try {
@@ -372,7 +394,11 @@ router.post('/webhook', async (req, res) => {
             console.error(`Failed to trigger deployment for project ${project.name}:`, error);
           }
         }
+      } else {
+        console.log('Push is not to default branch, skipping deployment trigger');
       }
+    } else {
+      console.log(`Ignoring non-push event: ${event}`);
     }
 
     res.status(200).json({ success: true, message: 'Webhook processed' });

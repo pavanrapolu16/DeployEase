@@ -39,7 +39,7 @@ const projectSchema = new mongoose.Schema({
   },
   projectType: {
     type: String,
-    enum: ['static', 'node'],
+    enum: ['static', 'node', 'react'],
     default: 'node'
   },
   buildCommand: {
