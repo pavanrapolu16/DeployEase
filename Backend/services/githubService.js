@@ -231,13 +231,16 @@ class GitHubService {
    */
   async createWebhook(owner, repo, accessToken, webhookUrl, secret) {
     try {
+      if (!webhookUrl) {
+        throw new Error(`Webhook URL is missing for ${owner}/${repo}`);
+      }
       // First check if user has admin access
       const hasAdminAccess = await this.checkRepoAdminAccess(owner, repo, accessToken);
       if (!hasAdminAccess) {
         console.log(`Skipping webhook creation for ${owner}/${repo} - user lacks admin access`);
         return null;
       }
-
+      console.log(`📡 Creating webhook for ${owner}/${repo} → ${webhookUrl}`);
       const response = await axios.post(`${this.baseURL}/repos/${owner}/${repo}/hooks`, {
         name: 'web',
         active: true,
@@ -255,13 +258,19 @@ class GitHubService {
         }
       });
 
+      console.log('✅ Webhook created:', response.data.id);
+
       return {
         id: response.data.id,
         url: response.data.url,
         active: response.data.active
       };
     } catch (error) {
-      console.error('Error creating webhook:', error.response?.data || error.message);
+      console.error('❌ Error creating webhook:', {
+        status: error.response?.status,
+        data: error.response?.data
+      });
+      // console.error('Error creating webhook:', error.response?.data || error.message);
       throw new Error('Failed to create webhook');
     }
   }
