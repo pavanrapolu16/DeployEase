@@ -54,7 +54,7 @@ router.get('/google/callback',
 // @access  Public
 router.get('/github',
   passport.authenticate('github', {
-    scope: ['user:email', 'user']
+    scope: ['user:email', 'repo', 'admin:repo_hook']
   })
 );
 

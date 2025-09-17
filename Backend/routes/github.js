@@ -328,16 +328,21 @@ router.post('/webhook', async (req, res) => {
       ref: req.body?.ref
     });
 
-    // Verify webhook signature (implement signature verification)
-    if (!verifyWebhookSignature(payload, signature)) {
-      console.log('Webhook signature verification failed');
-      return res.status(401).json({
-        success: false,
-        message: 'Invalid webhook signature'
-      });
-    }
+    // Skip signature verification for ping events
+    if (event !== 'ping') {
+      // Verify webhook signature (implement signature verification)
+      if (!verifyWebhookSignature(payload, signature)) {
+        console.log('Webhook signature verification failed');
+        return res.status(401).json({
+          success: false,
+          message: 'Invalid webhook signature'
+        });
+      }
 
-    console.log('Webhook signature verified successfully');
+      console.log('Webhook signature verified successfully');
+    } else {
+      console.log('Skipping signature verification for ping event');
+    }
 
     if (event === 'push') {
       const { repository, ref, commits } = req.body;
@@ -424,7 +429,14 @@ function verifyWebhookSignature(payload, signature) {
   hmac.update(payload, 'utf8');
   const expectedSignature = `sha256=${hmac.digest('hex')}`;
 
-  return crypto.timingSafeEqual(Buffer.from(signature), Buffer.from(expectedSignature));
+  console.log('Webhook signature verification:');
+  console.log('Received signature:', signature);
+  console.log('Expected signature:', expectedSignature);
+
+  const isValid = crypto.timingSafeEqual(Buffer.from(signature), Buffer.from(expectedSignature));
+  console.log('Signature valid:', isValid);
+
+  return isValid;
 }
 
 module.exports = router;
