@@ -128,6 +128,30 @@ class DeploymentService {
   }
 
   /**
+   * Copy directory recursively
+   */
+  async copyDirectory(source, target) {
+    const fs = require('fs').promises;
+    const path = require('path');
+
+    // Create target directory if it doesn't exist
+    await fs.mkdir(target, { recursive: true });
+
+    const entries = await fs.readdir(source, { withFileTypes: true });
+
+    for (const entry of entries) {
+      const sourcePath = path.join(source, entry.name);
+      const targetPath = path.join(target, entry.name);
+
+      if (entry.isDirectory()) {
+        await this.copyDirectory(sourcePath, targetPath);
+      } else {
+        await fs.copyFile(sourcePath, targetPath);
+      }
+    }
+  }
+
+  /**
    * Get commit information from cloned repository
    */
   async getCommitInfo(project, deploymentDir, deployment) {
