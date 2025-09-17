@@ -195,6 +195,32 @@ class GitHubService {
   }
 
   /**
+   * Check if user has admin access to repository
+   * @param {string} owner - Repository owner
+   * @param {string} repo - Repository name
+   * @param {string} accessToken - GitHub OAuth access token
+   * @returns {Promise<boolean>} True if user has admin access
+   */
+  async checkRepoAdminAccess(owner, repo, accessToken) {
+    try {
+      const response = await axios.get(`${this.baseURL}/repos/${owner}/${repo}`, {
+        headers: {
+          'Authorization': `token ${accessToken}`,
+          'Accept': 'application/vnd.github.v3+json',
+          'User-Agent': 'DeployEase-App'
+        }
+      });
+
+      // Check if user has admin permission
+      const permissions = response.data.permissions || {};
+      return permissions.admin === true;
+    } catch (error) {
+      console.error('Error checking repo permissions:', error.response?.data || error.message);
+      return false;
+    }
+  }
+
+  /**
    * Create webhook for repository
    * @param {string} owner - Repository owner
    * @param {string} repo - Repository name
@@ -205,6 +231,13 @@ class GitHubService {
    */
   async createWebhook(owner, repo, accessToken, webhookUrl, secret) {
     try {
+      // First check if user has admin access
+      const hasAdminAccess = await this.checkRepoAdminAccess(owner, repo, accessToken);
+      if (!hasAdminAccess) {
+        console.log(`Skipping webhook creation for ${owner}/${repo} - user lacks admin access`);
+        return null;
+      }
+
       const response = await axios.post(`${this.baseURL}/repos/${owner}/${repo}/hooks`, {
         name: 'web',
         active: true,

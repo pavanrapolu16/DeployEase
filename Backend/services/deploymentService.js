@@ -44,6 +44,9 @@ class DeploymentService {
       // Clone repository
       await this.cloneRepository(project, deploymentDir, deployment);
 
+      // Get commit information
+      await this.getCommitInfo(project, deploymentDir, deployment);
+
       // Detect framework and set build settings for non-static projects
       if (project.projectType !== 'static') {
         await this.detectFramework(project, deploymentDir, deployment);
@@ -78,8 +81,7 @@ class DeploymentService {
       }
     
       // Update deployment as successful
-      deployment.deployedUrl = deployedUrl;
-      await deployment.updateStatus('success');
+      await deployment.updateStatus('success', null, deployedUrl);
       await deployment.addLog('info', `Deployment completed successfully. Site available at: ${deployedUrl}`);
     
       // Update project's last deployment
@@ -126,6 +128,54 @@ class DeploymentService {
   }
 
   /**
+   * Get commit information from cloned repository
+   */
+  async getCommitInfo(project, deploymentDir, deployment) {
+    return new Promise((resolve, reject) => {
+      // Get commit SHA
+      exec('git rev-parse HEAD', { cwd: deploymentDir }, async (error, shaStdout, shaStderr) => {
+        if (error) {
+          await deployment.addLog('error', `Failed to get commit SHA: ${error.message}`);
+          resolve(); // Don't fail deployment for this
+          return;
+        }
+
+        const commitSha = shaStdout.trim();
+
+        // Get commit message
+        exec('git log --oneline -1 --pretty=format:%s', { cwd: deploymentDir }, async (error, messageStdout, messageStderr) => {
+          if (error) {
+            await deployment.addLog('error', `Failed to get commit message: ${error.message}`);
+            resolve();
+            return;
+          }
+
+          const commitMessage = messageStdout.trim();
+
+          // Update deployment with commit info
+          try {
+            await deployment.constructor.updateOne(
+              { _id: deployment._id },
+              {
+                $set: {
+                  commitSha,
+                  commitMessage,
+                  branch: project.branch || 'main'
+                }
+              }
+            );
+            await deployment.addLog('info', `Commit: ${commitSha.substring(0, 7)} - ${commitMessage}`);
+          } catch (updateError) {
+            await deployment.addLog('error', `Failed to update commit info: ${updateError.message}`);
+          }
+
+          resolve();
+        });
+      });
+    });
+  }
+
+  /**
    * Detect framework and set build settings
    */
   async detectFramework(project, deploymentDir, deployment) {
@@ -135,52 +185,62 @@ class DeploymentService {
 
       const devDeps = packageJson.devDependencies || {};
       const deps = packageJson.dependencies || {};
+      const scripts = packageJson.scripts || {};
+
+      await deployment.addLog('info', `Package.json found. Dependencies: ${Object.keys(deps).length}, DevDeps: ${Object.keys(devDeps).length}`);
 
       // Detect Vite
       if (devDeps.vite) {
-        if (!project.outputDir || project.outputDir === 'dist') {
-          project.outputDir = 'dist';
-        }
-        if (!project.buildCommand || project.buildCommand === 'npm run build') {
-          project.buildCommand = 'npm run build';
-        }
-        await deployment.addLog('info', 'Detected Vite framework, using output dir: dist');
+        project.outputDir = 'dist';
+        project.buildCommand = 'npm run build';
+        await deployment.addLog('info', '✅ Detected Vite framework, using output dir: dist, build command: npm run build');
       }
       // Detect Create React App
       else if (devDeps['react-scripts']) {
-        if (!project.outputDir || project.outputDir === 'dist') {
-          project.outputDir = 'build';
-        }
-        if (!project.buildCommand || project.buildCommand === 'npm run build') {
-          project.buildCommand = 'npm run build';
-        }
-        await deployment.addLog('info', 'Detected Create React App, using output dir: build');
+        project.outputDir = 'build';
+        project.buildCommand = 'npm run build';
+        await deployment.addLog('info', '✅ Detected Create React App, using output dir: build, build command: npm run build');
       }
       // Detect Next.js
       else if (deps.next) {
-        if (!project.outputDir || project.outputDir === 'dist') {
-          project.outputDir = '.next';
-        }
-        if (!project.buildCommand || project.buildCommand === 'npm run build') {
-          project.buildCommand = 'npm run build';
-        }
-        await deployment.addLog('info', 'Detected Next.js, using output dir: .next');
+        project.outputDir = 'out'; // For static export
+        project.buildCommand = scripts.export ? 'npm run export' : 'npm run build';
+        await deployment.addLog('info', `✅ Detected Next.js, using output dir: out, build command: ${project.buildCommand}`);
       }
-      // Default for React
+      // Detect Parcel
+      else if (devDeps.parcel) {
+        project.outputDir = 'dist';
+        project.buildCommand = 'npm run build';
+        await deployment.addLog('info', '✅ Detected Parcel, using output dir: dist, build command: npm run build');
+      }
+      // Generic React detection
       else if (deps.react) {
-        if (!project.outputDir) {
+        // Check for common build scripts
+        if (scripts.build) {
+          project.buildCommand = 'npm run build';
+          // Try to infer output dir from scripts or common patterns
+          if (scripts.build.includes('vite') || scripts.build.includes('parcel')) {
+            project.outputDir = 'dist';
+          } else if (scripts.build.includes('webpack') || scripts.build.includes('react-scripts')) {
+            project.outputDir = 'build';
+          } else {
+            project.outputDir = 'dist'; // Default assumption
+          }
+          await deployment.addLog('info', `✅ Detected React project with build script, using output dir: ${project.outputDir}, build command: npm run build`);
+        } else {
+          await deployment.addLog('warn', '⚠️  React detected but no build script found in package.json');
           project.outputDir = 'build';
-        }
-        if (!project.buildCommand) {
           project.buildCommand = 'npm run build';
         }
-        await deployment.addLog('info', 'Detected React project, using default settings');
       }
       else {
-        await deployment.addLog('info', 'No specific framework detected, using project defaults');
+        await deployment.addLog('info', 'ℹ️  No React framework detected, using project defaults');
       }
+
+      await deployment.addLog('info', `Final build settings - Command: ${project.buildCommand}, Output: ${project.outputDir}`);
+
     } catch (error) {
-      await deployment.addLog('info', 'Could not detect framework, using project defaults');
+      await deployment.addLog('error', `❌ Framework detection failed: ${error.message}, using project defaults`);
     }
   }
 
@@ -224,14 +284,34 @@ class DeploymentService {
 
       deployment.addLog('info', `Building project with command: ${buildCommand}`);
 
-      exec(buildCommand, { cwd: deploymentDir }, async (error, stdout, stderr) => {
+      exec(buildCommand, { cwd: deploymentDir, maxBuffer: 1024 * 1024 * 10 }, async (error, stdout, stderr) => {
+        // Log stdout if present
+        if (stdout && stdout.trim()) {
+          await deployment.addLog('info', `Build output: ${stdout.trim()}`);
+        }
+
         if (error) {
-          await deployment.addLog('error', `Build failed: ${stderr}`);
+          await deployment.addLog('error', `Build failed with exit code ${error.code}`);
+          if (stderr && stderr.trim()) {
+            await deployment.addLog('error', `Build stderr: ${stderr.trim()}`);
+          }
+          await deployment.addLog('error', `Build error: ${error.message}`);
           reject(new Error(`Build failed: ${error.message}`));
           return;
         }
 
-        await deployment.addLog('info', 'Project built successfully');
+        // Check if output directory exists
+        const outputDir = path.join(deploymentDir, project.outputDir || 'dist');
+        try {
+          await fs.access(outputDir);
+          await deployment.addLog('info', `✅ Build output directory found: ${project.outputDir || 'dist'}`);
+        } catch (accessError) {
+          await deployment.addLog('error', `❌ Build output directory not found: ${project.outputDir || 'dist'}`);
+          reject(new Error(`Build output directory '${project.outputDir || 'dist'}' not found after build`));
+          return;
+        }
+
+        await deployment.addLog('info', '✅ Project built successfully');
         resolve();
       });
     });

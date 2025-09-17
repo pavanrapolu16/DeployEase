@@ -64,23 +64,36 @@ deploymentSchema.index({ status: 1 });
 
 // Instance method to add log
 deploymentSchema.methods.addLog = function(level, message) {
-  this.buildLogs.push({
-    level,
-    message
-  });
-  return this.save();
+  // Use updateOne to avoid concurrent save issues
+  return this.constructor.updateOne(
+    { _id: this._id },
+    {
+      $push: {
+        buildLogs: {
+          timestamp: new Date(),
+          level,
+          message
+        }
+      }
+    }
+  );
 };
 
 // Instance method to update status
-deploymentSchema.methods.updateStatus = function(status, errorMessage = null) {
-  this.status = status;
-  if (errorMessage) {
-    this.errorMessage = errorMessage;
-  }
-  if (status === 'success' || status === 'failed') {
-    this.buildTime = Date.now() - this.createdAt.getTime();
-  }
-  return this.save();
+deploymentSchema.methods.updateStatus = function(status, errorMessage = null, deployedUrl = null) {
+  const updateData = {
+    status,
+    ...(errorMessage && { errorMessage }),
+    ...(deployedUrl && { deployedUrl }),
+    ...((status === 'success' || status === 'failed') && {
+      buildTime: Date.now() - this.createdAt.getTime()
+    })
+  };
+
+  return this.constructor.updateOne(
+    { _id: this._id },
+    { $set: updateData }
+  );
 };
 
 // Static method to find deployments by project
