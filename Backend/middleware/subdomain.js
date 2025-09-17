@@ -11,7 +11,7 @@ const subdomainHandler = async (req, res, next) => {
   try {
     const host = req.headers.host;
     const baseDomain = process.env.BASE_DOMAIN || 'sthara.fun';
-    console.log(`[SUBDOMAIN] Middleware triggered for host: ${host}`);
+    // console.log(`[SUBDOMAIN] Middleware triggered for host: ${host}`);
 
     // Skip if no host header or if it's the main domain
     if (!host) {
