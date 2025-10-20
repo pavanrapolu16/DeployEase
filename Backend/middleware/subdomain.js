@@ -86,7 +86,12 @@ const subdomainHandler = async (req, res, next) => {
     console.log(`[SUBDOMAIN] Found project:`, project ? {
       id: project._id,
       name: project.name,
-      hasLastDeployment: !!project.lastDeployment
+      projectType: project.projectType,
+      customDomain: project.customDomain,
+      hasLastDeployment: !!project.lastDeployment,
+      lastDeploymentId: project.lastDeployment?._id,
+      containerId: project.lastDeployment?.containerId,
+      containerPort: project.lastDeployment?.containerPort
     } : 'null');
 
     if (!project || !project.lastDeployment) {
@@ -136,8 +141,10 @@ const subdomainHandler = async (req, res, next) => {
     // Check if this is a Node.js project with Docker container
     if (project.projectType === 'node' && project.lastDeployment.containerId) {
       console.log(`[SUBDOMAIN] Node.js project detected, proxying to Docker container`);
+      console.log(`[SUBDOMAIN] Project type: ${project.projectType}`);
       console.log(`[SUBDOMAIN] Container ID: ${project.lastDeployment.containerId}`);
       console.log(`[SUBDOMAIN] Container port: ${project.lastDeployment.containerPort || 3000}`);
+      console.log(`[SUBDOMAIN] Full deployment object:`, JSON.stringify(project.lastDeployment, null, 2));
 
       // Proxy the request to the Docker container
       const containerPort = project.lastDeployment.containerPort || 3000;
