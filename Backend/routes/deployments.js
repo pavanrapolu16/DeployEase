@@ -311,6 +311,44 @@ router.delete('/:id', authenticateToken, async (req, res) => {
       });
     }
 
+    // Get deployment details before deletion for cleanup
+    const deploymentToDelete = await Deployment.findById(req.params.id);
+
+    // If this is a Node.js deployment with containers, clean them up
+    if (deploymentToDelete && deploymentToDelete.containerId) {
+      try {
+        // Stop and remove the container
+        await new Promise((resolve, reject) => {
+          exec(`sudo docker stop ${deploymentToDelete.containerId} && sudo docker rm ${deploymentToDelete.containerId}`, (error, stdout, stderr) => {
+            if (error) {
+              console.error(`Failed to stop/remove container ${deploymentToDelete.containerId}:`, error);
+            } else {
+              console.log(`Cleaned up container: ${deploymentToDelete.containerId}`);
+            }
+            resolve(); // Continue even if cleanup fails
+          });
+        });
+
+        // Remove the Docker image
+        if (deploymentToDelete.containerName) {
+          const imageName = `deployease-${deploymentToDelete.containerName.split('-').slice(1).join('-')}`;
+          await new Promise((resolve, reject) => {
+            exec(`sudo docker rmi ${imageName}`, (error, stdout, stderr) => {
+              if (error) {
+                console.error(`Failed to remove image ${imageName}:`, error);
+              } else {
+                console.log(`Removed Docker image: ${imageName}`);
+              }
+              resolve(); // Continue even if cleanup fails
+            });
+          });
+        }
+      } catch (cleanupError) {
+        console.error('Error during container cleanup:', cleanupError);
+        // Don't fail the deletion if cleanup fails
+      }
+    }
+
     await Deployment.findByIdAndDelete(req.params.id);
 
     res.json({

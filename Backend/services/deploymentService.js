@@ -528,11 +528,21 @@ CMD ["npm", "start"]
           await deployment.addLog('info', `✅ Container started successfully with ID: ${containerId}`);
 
           // Store container info in deployment
-          await Deployment.findByIdAndUpdate(deployment._id, {
-            containerId,
-            containerName,
-            containerPort: availablePort
-          });
+          try {
+            const updateResult = await Deployment.findByIdAndUpdate(deployment._id, {
+              containerId,
+              containerName,
+              containerPort: availablePort
+            });
+            await deployment.addLog('info', `✅ Container info stored in database: ID=${containerId}, Port=${availablePort}`);
+
+            if (!updateResult) {
+              await deployment.addLog('error', `❌ Failed to update deployment with container info`);
+            }
+          } catch (updateError) {
+            await deployment.addLog('error', `❌ Database update error: ${updateError.message}`);
+            console.error('Container info update error:', updateError);
+          }
 
           resolve(containerId);
         });
