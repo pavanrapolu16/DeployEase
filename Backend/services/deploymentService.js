@@ -31,6 +31,7 @@ class DeploymentService {
 
     const project = deployment.project;
     const deploymentDir = path.join(this.deploymentsDir, deploymentId.toString());
+    let deployedUrl; // ✅ Declare deployedUrl before usage
 
     try {
       // Update status to building
@@ -267,9 +268,10 @@ class DeploymentService {
       }
       else {
         if (project.projectType === 'node') {
-          project.buildCommand = 'npm run build';
-          project.outputDir = 'dist';
-          await deployment.addLog('info', '✅ Detected Node.js project - will use Docker for builds');
+          // For Node.js, we don't need a build step - just skip it
+          project.buildCommand = 'echo "No build step needed for Node.js"';
+          project.outputDir = '.';
+          await deployment.addLog('info', '✅ Detected Node.js project - will use Docker for containerization');
           await deployment.addLog('info', `Build command set to: ${project.buildCommand}`);
           await deployment.addLog('info', `Output directory set to: ${project.outputDir}`);
         } else {
@@ -419,8 +421,6 @@ RUN npm install
 # Copy source code
 COPY . .
 
-# Build the application (if build script exists)
-RUN npm run build || echo "No build script found"
 
 # Expose port (default to 3000, can be overridden)
 EXPOSE 3000
@@ -446,7 +446,7 @@ CMD ["npm", "start"]
   async buildDockerImage(project, deploymentDir, deployment) {
     return new Promise((resolve, reject) => {
       const imageName = `deployease-${project.name.toLowerCase()}-${deployment._id.toString()}`;
-      const buildCommand = `docker build -t ${imageName} .`;
+      const buildCommand = `sudo docker build -t ${imageName} .`;
 
       deployment.addLog('info', '🏗️ Building Docker image...');
       deployment.addLog('info', `🏷️ Image name: ${imageName}`);
@@ -552,7 +552,7 @@ CMD ["npm", "start"]
    * Get container URL for Node.js deployments
    */
   async getContainerUrl(project, deployment, containerId) {
-    const port = process.env.NODE_PORT || 3000;
+    const port = deployment.containerPort || process.env.NODE_PORT || 3000; // ✅ use actual dynamic port
     const baseDomain = process.env.BASE_DOMAIN || 'deployease.in';
     const protocol = process.env.NODE_ENV === 'production' ? 'https' : 'http';
 
