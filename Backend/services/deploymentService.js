@@ -258,7 +258,15 @@ class DeploymentService {
         }
       }
       else {
-        await deployment.addLog('info', 'ℹ️  No React framework detected, using project defaults');
+        if (project.projectType === 'node') {
+          project.buildCommand = 'docker run --rm -v $(pwd):/app -w /app node:18-alpine npm run build';
+          project.outputDir = 'dist';
+          await deployment.addLog('info', '✅ Detected Node.js project - will use Docker for builds');
+          await deployment.addLog('info', `Build command set to: ${project.buildCommand}`);
+          await deployment.addLog('info', `Output directory set to: ${project.outputDir}`);
+        } else {
+          await deployment.addLog('info', 'ℹ️  No React framework detected, using project defaults');
+        }
       }
 
       await deployment.addLog('info', `Final build settings - Command: ${project.buildCommand}, Output: ${project.outputDir}`);
@@ -278,18 +286,43 @@ class DeploymentService {
 
       fs.access(packageJsonPath)
         .then(() => {
-          deployment.addLog('info', 'Installing dependencies...');
+          if (project.projectType === 'node') {
+            deployment.addLog('info', '🔧 Installing Node.js dependencies using Docker...');
+            deployment.addLog('info', '📦 Using Docker image: node:18-alpine');
+            deployment.addLog('info', `📁 Working directory: ${deploymentDir}`);
+          } else {
+            deployment.addLog('info', 'Installing dependencies...');
+          }
 
-          // Force install devDependencies by setting NODE_ENV=development
-          const env = { ...process.env, NODE_ENV: 'development' };
+          let installCommand;
+          if (project.projectType === 'node') {
+            // Use Docker for Node.js projects
+            installCommand = `docker run --rm -v ${deploymentDir}:/app -w /app node:18-alpine npm install`;
+            deployment.addLog('info', `🚀 Executing: ${installCommand}`);
+          } else {
+            // Use npm directly for other projects
+            installCommand = 'npm install';
+          }
 
-          exec('npm install', { cwd: deploymentDir, env }, async (error, stdout, stderr) => {
+          const env = project.projectType === 'node' ? process.env : { ...process.env, NODE_ENV: 'development' };
+
+          exec(installCommand, { cwd: deploymentDir, env }, async (error, stdout, stderr) => {
             if (error) {
-              await deployment.addLog('error', `npm install failed: ${stderr}`);
+              await deployment.addLog('error', `❌ Dependency installation failed with exit code ${error.code}`);
+              if (stderr && stderr.trim()) {
+                await deployment.addLog('error', `📄 Error output: ${stderr.trim()}`);
+              }
+              if (stdout && stdout.trim()) {
+                await deployment.addLog('info', `📄 Standard output: ${stdout.trim()}`);
+              }
+              await deployment.addLog('error', `💥 Error message: ${error.message}`);
               reject(new Error(`Failed to install dependencies: ${error.message}`));
               return;
             }
 
+            if (stdout && stdout.trim()) {
+              await deployment.addLog('info', `📄 Install output: ${stdout.trim()}`);
+            }
             await deployment.addLog('info', '✅ Dependencies installed successfully');
             resolve();
           });
@@ -307,33 +340,45 @@ class DeploymentService {
    */
   async buildProject(project, deploymentDir, deployment) {
     return new Promise((resolve, reject) => {
-      const buildCommand = project.buildCommand || 'npm run build';
+      let buildCommand = project.buildCommand || 'npm run build';
 
-      deployment.addLog('info', `Building project with command: ${buildCommand}`);
+      if (project.projectType === 'node') {
+        // Use Docker for Node.js builds
+        buildCommand = `docker run --rm -v ${deploymentDir}:/app -w /app node:18-alpine ${buildCommand}`;
+        deployment.addLog('info', '🔨 Building Node.js project using Docker...');
+        deployment.addLog('info', '🐳 Using Docker image: node:18-alpine');
+        deployment.addLog('info', `📁 Working directory: ${deploymentDir}`);
+      } else {
+        deployment.addLog('info', '🔨 Building project...');
+      }
+
+      deployment.addLog('info', `🚀 Executing build command: ${buildCommand}`);
 
       exec(buildCommand, { cwd: deploymentDir, maxBuffer: 1024 * 1024 * 10 }, async (error, stdout, stderr) => {
         // Log stdout if present
         if (stdout && stdout.trim()) {
-          await deployment.addLog('info', `Build output: ${stdout.trim()}`);
+          await deployment.addLog('info', `📄 Build stdout: ${stdout.trim()}`);
         }
 
         if (error) {
-          await deployment.addLog('error', `Build failed with exit code ${error.code}`);
+          await deployment.addLog('error', `❌ Build failed with exit code ${error.code}`);
           if (stderr && stderr.trim()) {
-            await deployment.addLog('error', `Build stderr: ${stderr.trim()}`);
+            await deployment.addLog('error', `📄 Build stderr: ${stderr.trim()}`);
           }
-          await deployment.addLog('error', `Build error: ${error.message}`);
+          await deployment.addLog('error', `💥 Build error: ${error.message}`);
           reject(new Error(`Build failed: ${error.message}`));
           return;
         }
 
         // Check if output directory exists
         const outputDir = path.join(deploymentDir, project.outputDir || 'dist');
+        deployment.addLog('info', `🔍 Checking for output directory: ${outputDir}`);
         try {
           await fs.access(outputDir);
           await deployment.addLog('info', `✅ Build output directory found: ${project.outputDir || 'dist'}`);
         } catch (accessError) {
           await deployment.addLog('error', `❌ Build output directory not found: ${project.outputDir || 'dist'}`);
+          await deployment.addLog('error', `💥 Error details: ${accessError.message}`);
           reject(new Error(`Build output directory '${project.outputDir || 'dist'}' not found after build`));
           return;
         }
