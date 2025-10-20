@@ -53,6 +53,17 @@ const deploymentSchema = new mongoose.Schema({
   triggeredBy: {
     type: mongoose.Schema.Types.ObjectId,
     ref: 'User'
+  },
+  containerId: {
+    type: String,
+    trim: true
+  },
+  containerName: {
+    type: String,
+    trim: true
+  },
+  containerPort: {
+    type: Number
   }
 }, {
   timestamps: true
