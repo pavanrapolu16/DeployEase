@@ -528,16 +528,11 @@ CMD ["npm", "start"]
           await deployment.addLog('info', `✅ Container started successfully with ID: ${containerId}`);
 
           // Store container info in deployment
-          await deployment.constructor.updateOne(
-            { _id: deployment._id },
-            {
-              $set: {
-                containerId,
-                containerName,
-                containerPort: availablePort
-              }
-            }
-          );
+          await Deployment.findByIdAndUpdate(deployment._id, {
+            containerId,
+            containerName,
+            containerPort: availablePort
+          });
 
           resolve(containerId);
         });
