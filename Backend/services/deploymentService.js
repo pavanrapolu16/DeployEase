@@ -267,7 +267,7 @@ class DeploymentService {
       }
       else {
         if (project.projectType === 'node') {
-          project.buildCommand = 'docker run --rm -v $(pwd):/app -w /app node:18-alpine npm run build';
+          project.buildCommand = 'npm run build';
           project.outputDir = 'dist';
           await deployment.addLog('info', '✅ Detected Node.js project - will use Docker for builds');
           await deployment.addLog('info', `Build command set to: ${project.buildCommand}`);
