@@ -133,7 +133,60 @@ const subdomainHandler = async (req, res, next) => {
       }
     }
 
-    // Get the deployment directory
+    // Check if this is a Node.js project with Docker container
+    if (project.projectType === 'node' && project.lastDeployment.containerId) {
+      console.log(`[SUBDOMAIN] Node.js project detected, proxying to Docker container`);
+      console.log(`[SUBDOMAIN] Container ID: ${project.lastDeployment.containerId}`);
+      console.log(`[SUBDOMAIN] Container port: ${project.lastDeployment.containerPort || 3000}`);
+
+      // Proxy the request to the Docker container
+      const containerPort = project.lastDeployment.containerPort || 3000;
+      const proxyUrl = `http://localhost:${containerPort}${req.url}`;
+
+      console.log(`[SUBDOMAIN] Proxying request to: ${proxyUrl}`);
+
+      // Use http module to proxy the request
+      const http = require('http');
+      const url = require('url');
+
+      const options = {
+        hostname: 'localhost',
+        port: containerPort,
+        path: req.url,
+        method: req.method,
+        headers: {
+          ...req.headers,
+          host: `localhost:${containerPort}` // Override host header
+        }
+      };
+
+      const proxyReq = http.request(options, (proxyRes) => {
+        // Copy response headers
+        res.status(proxyRes.statusCode);
+        Object.keys(proxyRes.headers).forEach(key => {
+          res.setHeader(key, proxyRes.headers[key]);
+        });
+
+        // Pipe response body
+        proxyRes.pipe(res);
+      });
+
+      proxyReq.on('error', (error) => {
+        console.error(`[SUBDOMAIN] Proxy error: ${error.message}`);
+        res.status(500).send('Service temporarily unavailable');
+      });
+
+      // Pipe request body if present
+      if (req.method !== 'GET' && req.method !== 'HEAD') {
+        req.pipe(proxyReq);
+      } else {
+        proxyReq.end();
+      }
+
+      return;
+    }
+
+    // For static/React projects, serve files from deployment directory
     const deploymentDir = path.join(__dirname, '../../deployments', project.lastDeployment._id.toString());
 
     // Check if deployment directory exists
@@ -147,7 +200,7 @@ const subdomainHandler = async (req, res, next) => {
     const requestedPath = req.path === '/' ? '/index.html' : req.path;
     const filePath = path.join(deploymentDir, requestedPath);
     console.log(`[SUBDOMAIN] Request for path: ${req.path}, trying file: ${filePath}`);
-  
+
     // Check if file exists
     try {
       const stats = await fs.stat(filePath);

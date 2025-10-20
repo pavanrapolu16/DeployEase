@@ -62,8 +62,16 @@ class DeploymentService {
         await this.buildProject(project, deploymentDir, deployment);
       }
 
-      // Deploy files
-      const deployedUrl = await this.deployFiles(project, deploymentDir, deployment);
+      // For Node.js projects, create and run Docker container
+      if (project.projectType === 'node') {
+        await this.createDockerfile(project, deploymentDir, deployment);
+        const imageName = await this.buildDockerImage(project, deploymentDir, deployment);
+        const containerId = await this.runDockerContainer(project, deploymentDir, deployment, imageName);
+        deployedUrl = await this.getContainerUrl(project, deployment, containerId);
+      } else {
+        // Deploy files for static/React projects
+        deployedUrl = await this.deployFiles(project, deploymentDir, deployment);
+      }
     
       // Copy built files to deployment root if not static
       if (project.projectType !== 'static') {
@@ -390,6 +398,190 @@ class DeploymentService {
   }
 
   /**
+   * Create Dockerfile for Node.js projects
+   */
+  async createDockerfile(project, deploymentDir, deployment) {
+    return new Promise(async (resolve, reject) => {
+      try {
+        const dockerfilePath = path.join(deploymentDir, 'Dockerfile');
+        const dockerfileContent = `# Use Node.js runtime
+FROM node:18-alpine
+
+# Set working directory
+WORKDIR /app
+
+# Copy package files
+COPY package*.json ./
+
+# Install dependencies
+RUN npm install
+
+# Copy source code
+COPY . .
+
+# Build the application (if build script exists)
+RUN npm run build || echo "No build script found"
+
+# Expose port (default to 3000, can be overridden)
+EXPOSE 3000
+
+# Start the application
+CMD ["npm", "start"]
+`;
+
+        await fs.writeFile(dockerfilePath, dockerfileContent);
+        await deployment.addLog('info', '🐳 Created Dockerfile for Node.js application');
+        await deployment.addLog('info', `📄 Dockerfile path: ${dockerfilePath}`);
+        resolve();
+      } catch (error) {
+        await deployment.addLog('error', `❌ Failed to create Dockerfile: ${error.message}`);
+        reject(error);
+      }
+    });
+  }
+
+  /**
+   * Build Docker image for Node.js projects
+   */
+  async buildDockerImage(project, deploymentDir, deployment) {
+    return new Promise((resolve, reject) => {
+      const imageName = `deployease-${project.name.toLowerCase()}-${deployment._id.toString()}`;
+      const buildCommand = `docker build -t ${imageName} .`;
+
+      deployment.addLog('info', '🏗️ Building Docker image...');
+      deployment.addLog('info', `🏷️ Image name: ${imageName}`);
+      deployment.addLog('info', `🚀 Build command: ${buildCommand}`);
+
+      exec(buildCommand, { cwd: deploymentDir }, async (error, stdout, stderr) => {
+        if (stdout && stdout.trim()) {
+          await deployment.addLog('info', `📄 Build output: ${stdout.trim()}`);
+        }
+
+        if (error) {
+          await deployment.addLog('error', `❌ Docker build failed with exit code ${error.code}`);
+          if (stderr && stderr.trim()) {
+            await deployment.addLog('error', `📄 Build stderr: ${stderr.trim()}`);
+          }
+          await deployment.addLog('error', `💥 Build error: ${error.message}`);
+          reject(new Error(`Docker build failed: ${error.message}`));
+          return;
+        }
+
+        await deployment.addLog('info', '✅ Docker image built successfully');
+        resolve(imageName);
+      });
+    });
+  }
+
+  /**
+   * Find available port for Docker container
+   */
+  async findAvailablePort(startPort = 3000) {
+    const net = require('net');
+
+    return new Promise((resolve, reject) => {
+      const server = net.createServer();
+
+      server.listen(startPort, () => {
+        const port = server.address().port;
+        server.close(() => resolve(port));
+      });
+
+      server.on('error', () => {
+        // Port is in use, try next one
+        resolve(this.findAvailablePort(startPort + 1));
+      });
+    });
+  }
+
+  /**
+   * Run Docker container for Node.js projects
+   */
+  async runDockerContainer(project, deploymentDir, deployment, imageName) {
+    return new Promise(async (resolve, reject) => {
+      try {
+        const containerName = `deployease-${project.name.toLowerCase()}-${deployment._id.toString()}`;
+
+        // Find an available port starting from 3000
+        const availablePort = await this.findAvailablePort(3000);
+        deployment.addLog('info', `🔍 Found available port: ${availablePort}`);
+
+        const runCommand = `docker run -d --name ${containerName} -p ${availablePort}:3000 ${imageName}`;
+
+        deployment.addLog('info', '🚀 Starting Docker container...');
+        deployment.addLog('info', `🏷️ Container name: ${containerName}`);
+        deployment.addLog('info', `🔌 Port mapping: ${availablePort}:3000`);
+        deployment.addLog('info', `🚀 Run command: ${runCommand}`);
+
+        exec(runCommand, { cwd: deploymentDir }, async (error, stdout, stderr) => {
+          if (error) {
+            await deployment.addLog('error', `❌ Failed to start container with exit code ${error.code}`);
+            if (stderr && stderr.trim()) {
+              await deployment.addLog('error', `📄 Error output: ${stderr.trim()}`);
+            }
+            await deployment.addLog('error', `💥 Container start error: ${error.message}`);
+            reject(new Error(`Failed to start container: ${error.message}`));
+            return;
+          }
+
+          const containerId = stdout.trim();
+          await deployment.addLog('info', `✅ Container started successfully with ID: ${containerId}`);
+
+          // Store container info in deployment
+          await deployment.constructor.updateOne(
+            { _id: deployment._id },
+            {
+              $set: {
+                containerId,
+                containerName,
+                containerPort: availablePort
+              }
+            }
+          );
+
+          resolve(containerId);
+        });
+      } catch (error) {
+        await deployment.addLog('error', `❌ Error finding available port: ${error.message}`);
+        reject(error);
+      }
+    });
+  }
+
+  /**
+   * Get container URL for Node.js deployments
+   */
+  async getContainerUrl(project, deployment, containerId) {
+    const port = process.env.NODE_PORT || 3000;
+    const baseDomain = process.env.BASE_DOMAIN || 'deployease.in';
+    const protocol = process.env.NODE_ENV === 'production' ? 'https' : 'http';
+
+    let deployedUrl;
+
+    if (project.customDomain) {
+      deployedUrl = `${protocol}://${project.customDomain}`;
+      await deployment.addLog('info', `🌐 Using custom domain: ${project.customDomain}`);
+    } else {
+      const subdomain = project.name.toLowerCase()
+        .replace(/[^a-z0-9-]/g, '-')
+        .replace(/--+/g, '-')
+        .replace(/^[-]+|[-]+$/g, '');
+
+      if (!subdomain || subdomain.length === 0) {
+        throw new Error('Project name results in invalid subdomain');
+      }
+
+      deployedUrl = `${protocol}://${subdomain}.${baseDomain}`;
+      await deployment.addLog('info', `🌐 Using subdomain: ${subdomain}.${baseDomain}`);
+    }
+
+    await deployment.addLog('info', `🐳 Container running on port ${port}`);
+    await deployment.addLog('info', `✅ Application deployed at: ${deployedUrl}`);
+
+    return deployedUrl;
+  }
+
+  /**
    * Deploy files
    */
   async deployFiles(project, deploymentDir, deployment) {
@@ -452,6 +644,49 @@ class DeploymentService {
   }
 
  /**
+  * Stop and remove Docker containers for old deployments
+  */
+ async cleanupDockerContainers() {
+   try {
+     const cutoffDate = new Date();
+     cutoffDate.setDate(cutoffDate.getDate() - 30); // Keep deployments for 30 days
+
+     const oldDeployments = await Deployment.find({
+       status: 'success',
+       createdAt: { $lt: cutoffDate },
+       containerId: { $exists: true }
+     }).select('_id containerId containerName');
+
+     for (const deployment of oldDeployments) {
+       try {
+         // Stop and remove container
+         if (deployment.containerId) {
+           await new Promise((resolve, reject) => {
+             exec(`docker stop ${deployment.containerId} && docker rm ${deployment.containerId}`, (error, stdout, stderr) => {
+               if (error) {
+                 console.error(`Failed to stop/remove container ${deployment.containerId}:`, error);
+               } else {
+                 console.log(`Cleaned up container: ${deployment.containerId}`);
+               }
+               resolve(); // Continue even if cleanup fails
+             });
+           });
+         }
+
+         // Remove deployment directory
+         const deploymentDir = path.join(this.deploymentsDir, deployment._id.toString());
+         await fs.rm(deploymentDir, { recursive: true, force: true });
+         console.log(`Cleaned up deployment directory: ${deployment._id}`);
+       } catch (error) {
+         console.error(`Failed to cleanup deployment ${deployment._id}:`, error);
+       }
+     }
+   } catch (error) {
+     console.error('Error during Docker cleanup:', error);
+   }
+ }
+
+ /**
   * Cleanup old deployments
   */
  async cleanupOldDeployments() {
@@ -473,6 +708,9 @@ class DeploymentService {
          console.error(`Failed to cleanup deployment ${deployment._id}:`, error);
        }
      }
+
+     // Also cleanup Docker containers
+     await this.cleanupDockerContainers();
    } catch (error) {
      console.error('Error during cleanup:', error);
    }
