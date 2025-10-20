@@ -304,8 +304,8 @@ class DeploymentService {
 
           let installCommand;
           if (project.projectType === 'node') {
-            // Use Docker for Node.js projects
-            installCommand = `docker run --rm -v ${deploymentDir}:/app -w /app node:18-alpine npm install`;
+            // Use Docker for Node.js projects with sudo
+            installCommand = `sudo docker run --rm -v ${deploymentDir}:/app -w /app node:18-alpine npm install`;
             deployment.addLog('info', `🚀 Executing: ${installCommand}`);
           } else {
             // Use npm directly for other projects
@@ -352,7 +352,7 @@ class DeploymentService {
 
       if (project.projectType === 'node') {
         // Use Docker for Node.js builds
-        buildCommand = `docker run --rm -v ${deploymentDir}:/app -w /app node:18-alpine ${buildCommand}`;
+        buildCommand = `sudo docker run --rm -v ${deploymentDir}:/app -w /app node:18-alpine ${buildCommand}`;
         deployment.addLog('info', '🔨 Building Node.js project using Docker...');
         deployment.addLog('info', '🐳 Using Docker image: node:18-alpine');
         deployment.addLog('info', `📁 Working directory: ${deploymentDir}`);
@@ -506,7 +506,7 @@ CMD ["npm", "start"]
         const availablePort = await this.findAvailablePort(3000);
         deployment.addLog('info', `🔍 Found available port: ${availablePort}`);
 
-        const runCommand = `docker run -d --name ${containerName} -p ${availablePort}:3000 ${imageName}`;
+        const runCommand = `sudo docker run -d --name ${containerName} -p ${availablePort}:3000 ${imageName}`;
 
         deployment.addLog('info', '🚀 Starting Docker container...');
         deployment.addLog('info', `🏷️ Container name: ${containerName}`);
@@ -660,18 +660,18 @@ CMD ["npm", "start"]
      for (const deployment of oldDeployments) {
        try {
          // Stop and remove container
-         if (deployment.containerId) {
-           await new Promise((resolve, reject) => {
-             exec(`docker stop ${deployment.containerId} && docker rm ${deployment.containerId}`, (error, stdout, stderr) => {
-               if (error) {
-                 console.error(`Failed to stop/remove container ${deployment.containerId}:`, error);
-               } else {
-                 console.log(`Cleaned up container: ${deployment.containerId}`);
-               }
-               resolve(); // Continue even if cleanup fails
+           if (deployment.containerId) {
+             await new Promise((resolve, reject) => {
+               exec(`sudo docker stop ${deployment.containerId} && sudo docker rm ${deployment.containerId}`, (error, stdout, stderr) => {
+                 if (error) {
+                   console.error(`Failed to stop/remove container ${deployment.containerId}:`, error);
+                 } else {
+                   console.log(`Cleaned up container: ${deployment.containerId}`);
+                 }
+                 resolve(); // Continue even if cleanup fails
+               });
              });
-           });
-         }
+           }
 
          // Remove deployment directory
          const deploymentDir = path.join(this.deploymentsDir, deployment._id.toString());
