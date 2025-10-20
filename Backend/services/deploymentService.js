@@ -74,12 +74,12 @@ class DeploymentService {
         deployedUrl = await this.deployFiles(project, deploymentDir, deployment);
       }
     
-      // Copy built files to deployment root if not static
-      if (project.projectType !== 'static') {
+      // Skip file copying for Node.js projects (they run in containers)
+      if (project.projectType !== 'static' && project.projectType !== 'node') {
         const outputDir = project.outputDir || 'dist';
         const sourceDir = path.join(deploymentDir, outputDir);
         const targetDir = deploymentDir;
-    
+
         try {
           await this.copyDirectory(sourceDir, targetDir);
           await deployment.addLog('info', `Copied built files from ${outputDir} to deployment root`);
