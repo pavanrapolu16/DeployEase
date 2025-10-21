@@ -24,14 +24,17 @@ export default function Logs() {
     try {
       setProjectsLoading(true);
       const res = await apiService.get('/projects');
+      console.log('Projects response:', res);
       const list = res.data?.projects || [];
+      console.log('Projects list:', list);
       setProjects(Array.isArray(list) ? list : []);
       if (Array.isArray(list) && list.length > 0) {
         const first = list[0];
         setSelectedProjectId(first._id);
         setSelectedProjectName(first.name || 'Project');
       }
-    } catch (_) {
+    } catch (error) {
+      console.error('Failed to load projects:', error);
       showError('Failed to load projects');
     } finally {
       setProjectsLoading(false);
@@ -42,8 +45,11 @@ export default function Logs() {
     if (!projectId) { setDeployments([]); return; }
     try {
       setDeploymentsLoading(true);
+      console.log('Fetching deployments for project:', projectId);
       const res = await apiService.get(`/deployments/project/${projectId}`);
+      console.log('Deployments response:', res);
       const list = res.data?.data?.deployments || [];
+      console.log('Deployments list:', list);
       setDeployments(Array.isArray(list) ? list : []);
       if (Array.isArray(list) && list.length > 0) {
         const d = list[0];
@@ -52,7 +58,8 @@ export default function Logs() {
         setSelectedDeploymentId(null);
         setLogs([]);
       }
-    } catch (_) {
+    } catch (error) {
+      console.error('Failed to load deployments:', error);
       showError('Failed to load deployments');
     } finally {
       setDeploymentsLoading(false);
@@ -64,15 +71,24 @@ export default function Logs() {
     try {
       setLogsLoading(true);
       setLogsError(null);
+      console.log('Fetching logs for deployment:', deploymentId);
       const res = await apiService.get(`/deployments/${deploymentId}`);
+      console.log('Logs response:', res);
       const deployment = res.data?.data?.deployment;
+      console.log('Deployment data:', deployment);
       if (deployment && Array.isArray(deployment.buildLogs)) {
-        const sorted = [...deployment.buildLogs].sort((a, b) => new Date(a.timestamp) - new Date(b.timestamp));
+        const sorted = [...deployment.buildLogs].sort((a, b) => {
+          const aTime = typeof a.timestamp === 'object' && a.timestamp.$date ? parseInt(a.timestamp.$date.$numberLong) : new Date(a.timestamp).getTime();
+          const bTime = typeof b.timestamp === 'object' && b.timestamp.$date ? parseInt(b.timestamp.$date.$numberLong) : new Date(b.timestamp).getTime();
+          return aTime - bTime;
+        });
+        console.log('Sorted logs:', sorted);
         setLogs(sorted);
       } else {
         setLogs([]);
       }
     } catch (err) {
+      console.error('Failed to load deployment logs:', err);
       setLogsError('Failed to load deployment logs');
     } finally {
       setLogsLoading(false);
@@ -100,7 +116,13 @@ export default function Logs() {
   }, [deployments, selectedDeploymentId, selectedProjectId]);
 
   const formatTimestamp = (ts) => {
-    const d = new Date(ts);
+    let timestamp;
+    if (typeof ts === 'object' && ts.$date) {
+      timestamp = parseInt(ts.$date.$numberLong);
+    } else {
+      timestamp = ts;
+    }
+    const d = new Date(timestamp);
     return d.toLocaleString('en-US', { year: 'numeric', month: 'short', day: 'numeric', hour: '2-digit', minute: '2-digit', second: '2-digit' });
   };
 
