@@ -173,9 +173,6 @@ export default function Projects() {
                     <span className="text-xs text-green-600 bg-green-100 px-2 py-1 rounded-full">Live</span>
                   </div>
                   <div className="flex gap-2 mt-3">
-                    <button onClick={() => handleViewLogs(project, project.lastDeployment)} className="bg-blue-500 hover:bg-blue-600 text-white py-2 px-4 rounded-lg font-semibold transition-colors flex items-center justify-center">
-                      <FaFileAlt size={16} />
-                    </button>
                     <button onClick={() => handleDeleteProject(project._id)} className="bg-red-500 hover:bg-red-600 text-white py-2 px-4 rounded-lg font-semibold transition-colors">
                       <FaTrash size={16} />
                     </button>
@@ -196,11 +193,23 @@ export default function Projects() {
                     <button onClick={() => handleDeployProject(project._id)} disabled={deploymentPolling[project._id]} className="flex-1 bg-primary-600 hover:bg-primary-700 text-white py-2 px-4 rounded-lg font-semibold transition-colors disabled:opacity-50 disabled:cursor-not-allowed flex items-center justify-center gap-2">
                       {deploymentPolling[project._id] ? (<><div className="w-4 h-4 border-2 border-white border-t-transparent rounded-full animate-spin"></div><span>Deploying...</span></>) : (<><FaRocket /><span>Deploy Now</span></>)}
                     </button>
+                    {project.lastDeployment && project.lastDeployment.status && project.lastDeployment.status !== 'success' && (
+                      <button onClick={() => handleViewLogs(project, project.lastDeployment)} className="bg-blue-500 hover:bg-blue-600 text-white py-2 px-3 rounded-lg font-semibold transition-colors flex items-center justify-center">
+                        <FaFileAlt size={16} />
+                      </button>
+                    )}
                   </div>
                 </div>
               ) : (
                 <div className="mt-3">
                   <button onClick={() => openBuildSettings(project)} className="bg-gray-100 hover:bg-gray-200 text-gray-800 py-2 px-3 rounded-lg font-semibold transition-colors">Settings</button>
+                  {project.lastDeployment && project.lastDeployment.status && project.lastDeployment.status !== 'success' && (
+                    <div className="mt-3">
+                      <button onClick={() => handleViewLogs(project, project.lastDeployment)} className="bg-blue-500 hover:bg-blue-600 text-white py-2 px-3 rounded-lg font-semibold transition-colors flex items-center justify-center">
+                        <FaFileAlt size={16} />
+                      </button>
+                    </div>
+                  )}
                 </div>
               )}
             </div>
@@ -208,7 +217,7 @@ export default function Projects() {
         </div>
       )}
 
-      <BuildSettingsModal isOpen={buildSettingsModalOpen} onClose={() => setBuildSettingsModalOpen(false)} project={selectedProjectForSettings} onUpdate={handleSettingsUpdate} />
+      <BuildSettingsModal isOpen={buildSettingsModalOpen} onClose={() => setBuildSettingsModalOpen(false)} project={selectedProjectForSettings} onSettingsUpdate={handleSettingsUpdate} />
       <DeploymentLogsModal isOpen={logsModalOpen} onClose={handleCloseLogsModal} deploymentId={selectedDeploymentForLogs} projectName={selectedProjectForLogs} />
     </section>
   );

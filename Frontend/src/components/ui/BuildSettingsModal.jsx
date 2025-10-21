@@ -94,9 +94,9 @@ const BuildSettingsModal = ({ isOpen, onClose, project, onSettingsUpdate }) => {
           />
 
           {/* Modal */}
-          <div className="fixed inset-0 z-50 flex items-center justify-center p-4">
+          <div className="fixed inset-0 z-50 flex justify-center items-start md:items-center p-4">
             <motion.div
-              className="bg-white rounded-xl shadow-xl max-w-lg w-full"
+              className="bg-white rounded-xl shadow-xl max-w-lg w-full max-h-[85vh] overflow-y-auto mt-6 md:mt-0"
               initial={{ opacity: 0, scale: 0.95, y: 20 }}
               animate={{ opacity: 1, scale: 1, y: 0 }}
               exit={{ opacity: 0, scale: 0.95, y: 20 }}
