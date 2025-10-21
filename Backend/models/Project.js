@@ -62,6 +62,11 @@ const projectSchema = new mongoose.Schema({
     trim: true,
     lowercase: true
   },
+  rootDirectory: {
+    type: String,
+    default: '.',
+    trim: true
+  },
   status: {
     type: String,
     enum: ['active', 'inactive'],

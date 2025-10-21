@@ -213,7 +213,7 @@ class DeploymentService {
    */
   async detectFramework(project, deploymentDir, deployment) {
     try {
-      const packageJsonPath = path.join(deploymentDir, 'package.json');
+      const packageJsonPath = path.join(deploymentDir, project.rootDirectory || '.', 'package.json');
       const packageJson = JSON.parse(await fs.readFile(packageJsonPath, 'utf8'));
 
       const devDeps = packageJson.devDependencies || {};
@@ -292,7 +292,7 @@ class DeploymentService {
   async installDependencies(project, deploymentDir, deployment) {
     return new Promise((resolve, reject) => {
       // Check if package.json exists
-      const packageJsonPath = path.join(deploymentDir, 'package.json');
+      const packageJsonPath = path.join(deploymentDir, project.rootDirectory || '.', 'package.json');
 
       fs.access(packageJsonPath)
         .then(() => {
@@ -307,7 +307,8 @@ class DeploymentService {
           let installCommand;
           if (project.projectType === 'node') {
             // Use Docker for Node.js projects with sudo
-            installCommand = `sudo docker run --rm -v ${deploymentDir}:/app -w /app node:18-alpine npm install`;
+            const workDir = project.rootDirectory && project.rootDirectory !== '.' ? `/app/${project.rootDirectory}` : '/app';
+            installCommand = `sudo docker run --rm -v ${deploymentDir}:/app -w ${workDir} node:18-alpine npm install`;
             deployment.addLog('info', `🚀 Executing: ${installCommand}`);
           } else {
             // Use npm directly for other projects
@@ -354,10 +355,11 @@ class DeploymentService {
 
       if (project.projectType === 'node') {
         // Use Docker for Node.js builds
-        buildCommand = `sudo docker run --rm -v ${deploymentDir}:/app -w /app node:18-alpine ${buildCommand}`;
+        const workDir = project.rootDirectory && project.rootDirectory !== '.' ? `/app/${project.rootDirectory}` : '/app';
+        buildCommand = `sudo docker run --rm -v ${deploymentDir}:/app -w ${workDir} node:18-alpine ${buildCommand}`;
         deployment.addLog('info', '🔨 Building Node.js project using Docker...');
         deployment.addLog('info', '🐳 Using Docker image: node:18-alpine');
-        deployment.addLog('info', `📁 Working directory: ${deploymentDir}`);
+        deployment.addLog('info', `📁 Working directory: ${workDir}`);
       } else {
         deployment.addLog('info', '🔨 Building project...');
       }
@@ -405,7 +407,9 @@ class DeploymentService {
   async createDockerfile(project, deploymentDir, deployment) {
     return new Promise(async (resolve, reject) => {
       try {
-        const dockerfilePath = path.join(deploymentDir, 'Dockerfile');
+        const dockerfileDir = path.join(deploymentDir, project.rootDirectory || '.');
+        await fs.mkdir(dockerfileDir, { recursive: true });
+        const dockerfilePath = path.join(dockerfileDir, 'Dockerfile');
         const dockerfileContent = `# Use Node.js runtime
 FROM node:18-alpine
 
@@ -446,11 +450,13 @@ CMD ["npm", "start"]
   async buildDockerImage(project, deploymentDir, deployment) {
     return new Promise((resolve, reject) => {
       const imageName = `deployease-${project.name.toLowerCase()}-${deployment._id.toString()}`;
-      const buildCommand = `sudo docker build -t ${imageName} .`;
+      const buildContext = project.rootDirectory && project.rootDirectory !== '.' ? project.rootDirectory : '.';
+      const buildCommand = `sudo docker build -t ${imageName} ${buildContext}`;
 
       deployment.addLog('info', '🏗️ Building Docker image...');
       deployment.addLog('info', `🏷️ Image name: ${imageName}`);
       deployment.addLog('info', `🚀 Build command: ${buildCommand}`);
+      deployment.addLog('info', `📁 Build context: ${buildContext}`);
 
       exec(buildCommand, { cwd: deploymentDir }, async (error, stdout, stderr) => {
         if (stdout && stdout.trim()) {

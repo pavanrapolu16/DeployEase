@@ -10,7 +10,8 @@ const BuildSettingsModal = ({ isOpen, onClose, project, onSettingsUpdate }) => {
     buildCommand: '',
     outputDir: '',
     branch: '',
-    projectType: 'node'
+    projectType: 'node',
+    rootDirectory: '.'
   });
 
   // Reset form when modal opens
@@ -20,7 +21,8 @@ const BuildSettingsModal = ({ isOpen, onClose, project, onSettingsUpdate }) => {
         buildCommand: project.buildCommand || 'npm run build',
         outputDir: project.outputDir || 'dist',
         branch: project.branch || 'main',
-        projectType: project.projectType || 'node'
+        projectType: project.projectType || 'node',
+        rootDirectory: project.rootDirectory || '.'
       });
     }
   }, [isOpen, project]);
@@ -56,7 +58,7 @@ const BuildSettingsModal = ({ isOpen, onClose, project, onSettingsUpdate }) => {
     e.preventDefault();
 
     // Validate form
-    if (!formData.buildCommand.trim() || !formData.outputDir.trim() || !formData.branch.trim()) {
+    if (!formData.buildCommand.trim() || !formData.outputDir.trim() || !formData.branch.trim() || !formData.rootDirectory.trim()) {
       showError('All fields are required');
       return;
     }
@@ -208,6 +210,24 @@ const BuildSettingsModal = ({ isOpen, onClose, project, onSettingsUpdate }) => {
                       required
                     />
                     <p className="mt-1 text-xs text-gray-500">Command to build your project</p>
+                  </div>
+
+                  {/* Root Directory */}
+                  <div>
+                    <label className="block text-sm font-medium text-gray-700 mb-2">
+                      Root Directory <span className="text-red-500">*</span>
+                    </label>
+                    <input
+                      type="text"
+                      name="rootDirectory"
+                      value={formData.rootDirectory}
+                      onChange={handleInputChange}
+                      placeholder="."
+                      className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-primary-500 focus:border-transparent"
+                      disabled={loading}
+                      required
+                    />
+                    <p className="mt-1 text-xs text-gray-500">Path to directory containing package.json</p>
                   </div>
 
                   {/* Output Directory */}

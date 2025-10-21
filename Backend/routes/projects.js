@@ -13,7 +13,7 @@ const router = express.Router();
 // @access  Private
 router.post('/', authenticateToken, async (req, res) => {
   try {
-    const { name, description, repositoryUrl, repositoryName, repositoryOwner, branch, buildCommand, outputDir, customDomain, projectType } = req.body;
+    const { name, description, repositoryUrl, repositoryName, repositoryOwner, branch, buildCommand, outputDir, customDomain, projectType, rootDirectory } = req.body;
 
     // Validate required fields
     if (!name || !repositoryUrl || !repositoryName || !repositoryOwner) {
@@ -127,7 +127,8 @@ router.post('/', authenticateToken, async (req, res) => {
       outputDir: outputDir || 'dist',
       customDomain: customDomain.toLowerCase(),
       subdomain: normalizedName,
-      projectType: projectType || 'node'
+      projectType: projectType || 'node',
+      rootDirectory: rootDirectory || '.'
     });
 
     await project.save();
@@ -234,7 +235,7 @@ router.get('/:id', authenticateToken, async (req, res) => {
 // @access  Private
 router.put('/:id', authenticateToken, async (req, res) => {
   try {
-    const { name, description, branch, buildCommand, outputDir, customDomain, status, projectType } = req.body;
+    const { name, description, branch, buildCommand, outputDir, customDomain, status, projectType, rootDirectory } = req.body;
 
     const project = await Project.findOne({
       _id: req.params.id,
@@ -308,6 +309,7 @@ router.put('/:id', authenticateToken, async (req, res) => {
     if (customDomain !== undefined) project.customDomain = customDomain ? customDomain.toLowerCase() : undefined;
     if (status) project.status = status;
     if (projectType) project.projectType = projectType;
+    if (rootDirectory !== undefined) project.rootDirectory = rootDirectory || '.';
 
     await project.save();
 

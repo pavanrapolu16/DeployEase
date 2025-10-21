@@ -7,6 +7,7 @@ const ProjectImportModal = ({ isOpen, onClose, repo }) => {
   const { showSuccess, showError } = useToast();
   const [projectType, setProjectType] = useState('node');
   const [customDomain, setCustomDomain] = useState('');
+  const [rootDirectory, setRootDirectory] = useState('.');
   const [loading, setLoading] = useState(false);
 
   // Reset form when modal opens
@@ -14,6 +15,7 @@ const ProjectImportModal = ({ isOpen, onClose, repo }) => {
     if (isOpen) {
       setProjectType('node');
       setCustomDomain('');
+      setRootDirectory('.');
       setLoading(false);
     }
   }, [isOpen]);
@@ -83,6 +85,7 @@ const ProjectImportModal = ({ isOpen, onClose, repo }) => {
         repositoryName,
         repositoryOwner,
         projectType,
+        rootDirectory,
         ...(fullCustomDomain && { customDomain: fullCustomDomain })
       };
 
@@ -206,6 +209,23 @@ const ProjectImportModal = ({ isOpen, onClose, repo }) => {
                       </label>
                     </div>
                   </div>
+                </div>
+
+                <div className="mb-6">
+                  <label className="block text-sm font-medium text-gray-700 mb-3">
+                    Root Directory
+                  </label>
+                  <input
+                    type="text"
+                    value={rootDirectory}
+                    onChange={(e) => setRootDirectory(e.target.value)}
+                    placeholder="."
+                    className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-primary-500 focus:border-transparent text-sm"
+                    disabled={loading}
+                  />
+                  <p className="mt-1 text-xs text-gray-500">
+                    Path to the directory containing package.json (leave as '.' for root)
+                  </p>
                 </div>
 
                 <div className="mb-6">
