@@ -24,9 +24,7 @@ export default function Logs() {
     try {
       setProjectsLoading(true);
       const res = await apiService.get('/projects');
-      console.log('Projects response:', res);
       const list = res.data?.projects || [];
-      console.log('Projects list:', list);
       setProjects(Array.isArray(list) ? list : []);
       if (Array.isArray(list) && list.length > 0) {
         const first = list[0];
@@ -45,11 +43,8 @@ export default function Logs() {
     if (!projectId) { setDeployments([]); return; }
     try {
       setDeploymentsLoading(true);
-      console.log('Fetching deployments for project:', projectId);
       const res = await apiService.get(`/deployments/project/${projectId}`);
-      console.log('Deployments response:', res);
-      const list = res.data?.data?.deployments || [];
-      console.log('Deployments list:', list);
+      const list = res.data?.deployments || [];
       setDeployments(Array.isArray(list) ? list : []);
       if (Array.isArray(list) && list.length > 0) {
         const d = list[0];
@@ -71,18 +66,14 @@ export default function Logs() {
     try {
       setLogsLoading(true);
       setLogsError(null);
-      console.log('Fetching logs for deployment:', deploymentId);
       const res = await apiService.get(`/deployments/${deploymentId}`);
-      console.log('Logs response:', res);
-      const deployment = res.data?.data?.deployment;
-      console.log('Deployment data:', deployment);
+      const deployment = res.data?.deployment;
       if (deployment && Array.isArray(deployment.buildLogs)) {
         const sorted = [...deployment.buildLogs].sort((a, b) => {
           const aTime = typeof a.timestamp === 'object' && a.timestamp.$date ? parseInt(a.timestamp.$date.$numberLong) : new Date(a.timestamp).getTime();
           const bTime = typeof b.timestamp === 'object' && b.timestamp.$date ? parseInt(b.timestamp.$date.$numberLong) : new Date(b.timestamp).getTime();
           return aTime - bTime;
         });
-        console.log('Sorted logs:', sorted);
         setLogs(sorted);
       } else {
         setLogs([]);
@@ -107,7 +98,7 @@ export default function Logs() {
   // Auto-refresh while building/pending
   useEffect(() => {
     const isActive = deployments.some(d => ['pending','building'].includes(d.status));
-    if (!isActive && !selectedDeploymentId) return;
+    if (!isActive) return;
     const interval = setInterval(() => {
       if (selectedProjectId) fetchDeploymentsForProject(selectedProjectId);
       if (selectedDeploymentId) fetchLogs(selectedDeploymentId);
