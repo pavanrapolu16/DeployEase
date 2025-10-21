@@ -88,6 +88,17 @@ export default function Logs() {
     return () => document.removeEventListener('mousedown', onClick);
   }, []);
 
+  // Auto-refresh while building/pending
+  useEffect(() => {
+    const isActive = deployments.some(d => ['pending','building'].includes(d.status));
+    if (!isActive && !selectedDeploymentId) return;
+    const interval = setInterval(() => {
+      if (selectedProjectId) fetchDeploymentsForProject(selectedProjectId);
+      if (selectedDeploymentId) fetchLogs(selectedDeploymentId);
+    }, 3000);
+    return () => clearInterval(interval);
+  }, [deployments, selectedDeploymentId, selectedProjectId]);
+
   const formatTimestamp = (ts) => {
     const d = new Date(ts);
     return d.toLocaleString('en-US', { year: 'numeric', month: 'short', day: 'numeric', hour: '2-digit', minute: '2-digit', second: '2-digit' });
@@ -183,6 +194,14 @@ export default function Logs() {
 
         <div className="grid grid-cols-1 lg:grid-cols-3 gap-4">
           <div className="lg:col-span-1 bg-white border border-gray-200 rounded-xl overflow-hidden">
+            <div className="flex items-center justify-between px-4 py-3 border-b bg-gray-50">
+              <div className="text-sm font-medium text-gray-700">Deployments</div>
+              <button
+                onClick={() => selectedProjectId && fetchDeploymentsForProject(selectedProjectId)}
+                disabled={deploymentsLoading || !selectedProjectId}
+                className="px-2 py-1 text-xs rounded border bg-white hover:bg-gray-100 disabled:opacity-50"
+              >Refresh</button>
+            </div>
             {deploymentsLoading ? (
               <div className="p-6 flex items-center gap-3 text-gray-500"><FaSpinner className="animate-spin" /> Loading deployments...</div>
             ) : deployments.length === 0 ? (
