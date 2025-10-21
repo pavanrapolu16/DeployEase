@@ -57,7 +57,7 @@ export default function DashboardLayout() {
               <FaCode size={18} />
               <span>My Projects</span>
             </Link>
-            <Link to="/dashboard/logs" className={`hidden w-full block py-2 px-3 rounded-lg flex items-center space-x-3 transition-colors ${isActive('logs') ? 'bg-primary-50 text-primary-700' : 'hover:bg-gray-100'}`} onClick={() => setShowSidebar(false)}>
+            <Link to="/dashboard/logs" className={`w-full block py-2 px-3 rounded-lg flex items-center space-x-3 transition-colors ${isActive('logs') ? 'bg-primary-50 text-primary-700' : 'hover:bg-gray-100'}`} onClick={() => setShowSidebar(false)}>
               <FaFileAlt size={18} />
               <span>Logs</span>
             </Link>
