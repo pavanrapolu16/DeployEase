@@ -32,22 +32,27 @@ router.post('/', authenticateToken, async (req, res) => {
     }
 
     // Validate repository exists and user has access
+    // Try public validation first; if it fails and user has a token, try with token.
     try {
-      const user = await User.findById(req.user._id);
-      if (!user || !user.accessToken) {
+      await githubService.getRepoDetails(repositoryOwner, repositoryName);
+    } catch (publicErr) {
+      try {
+        const user = await User.findById(req.user._id);
+        if (user && user.accessToken) {
+          await githubService.getRepoDetails(repositoryOwner, repositoryName, user.accessToken);
+        } else {
+          return res.status(400).json({
+            success: false,
+            message: 'Repository not found or is private. Connect GitHub to validate private repositories'
+          });
+        }
+      } catch (tokenErr) {
+        console.error('Repository validation failed:', tokenErr.message);
         return res.status(400).json({
           success: false,
-          message: 'GitHub access token is required to validate repository'
+          message: 'Repository not found or you do not have access to it'
         });
       }
-
-      await githubService.getRepoDetails(repositoryOwner, repositoryName, user.accessToken);
-    } catch (error) {
-      console.error('Repository validation failed:', error.message);
-      return res.status(400).json({
-        success: false,
-        message: 'Repository not found or you do not have access to it'
-      });
     }
 
     // Check if project with same repository already exists for this user

@@ -14,7 +14,13 @@ import AuthError from "./pages/AuthError";
 import EmailVerification from "./pages/EmailVerification";
 import { ToastProvider } from "./contexts/ToastContext";
 import { AuthProvider, useAuth } from "./contexts/AuthContext";
-import Dashboard from "./pages/Dashboard";
+import DashboardLayout from "./pages/dashboard/Layout";
+import Overview from "./pages/dashboard/Overview";
+import Repositories from "./pages/dashboard/Repositories";
+import Projects from "./pages/dashboard/Projects";
+import Settings from "./pages/dashboard/Settings";
+import Logs from "./pages/dashboard/Logs";
+import { Navigate } from "react-router-dom";
 import ProtectedRoute from "./components/ProtectedRoute";
 
 
@@ -165,12 +171,19 @@ export default function App() {
            {/* Email verification route */}
            <Route path="/verify-email" element={<EmailVerification />} />
 
-           {/* Protected dashboard route */}
-           <Route path="/dashboard" element={
+           {/* Protected dashboard routes */}
+           <Route path="/dashboard/*" element={
              <ProtectedRoute>
-               <Dashboard />
+               <DashboardLayout />
              </ProtectedRoute>
-           } />
+           }>
+             <Route index element={<Navigate to="overview" replace />} />
+             <Route path="overview" element={<Overview />} />
+             <Route path="repositories" element={<Repositories />} />
+             <Route path="projects" element={<Projects />} />
+             <Route path="logs" element={<Logs />} />
+             <Route path="settings" element={<Settings />} />
+           </Route>
 
            {/* Main application route */}
            <Route path="/*" element={<MainRoute />} />

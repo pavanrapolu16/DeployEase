@@ -262,6 +262,11 @@ export const AuthProvider = ({ children }) => {
     dispatch({ type: AUTH_ACTIONS.CLEAR_ERROR });
   };
 
+  // Set user directly (without API call) so UI can reflect changes immediately
+  const setUser = (user) => {
+    dispatch({ type: AUTH_ACTIONS.UPDATE_USER, payload: user });
+  };
+
   // Context value
   const value = {
     // State
@@ -277,6 +282,7 @@ export const AuthProvider = ({ children }) => {
     logout,
     updateProfile,
     changePassword,
+    setUser,
     clearError,
     verifyEmail,
     resendOTP,

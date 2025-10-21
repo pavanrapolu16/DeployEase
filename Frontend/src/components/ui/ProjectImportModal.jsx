@@ -122,9 +122,9 @@ const ProjectImportModal = ({ isOpen, onClose, repo }) => {
           />
 
           {/* Modal */}
-          <div className="fixed inset-0 z-50 flex items-center justify-center p-4">
+          <div className="fixed inset-0 z-50 flex items-start md:items-center justify-center p-4">
             <motion.div
-              className="bg-white rounded-xl shadow-xl max-w-md w-full"
+              className="bg-white rounded-xl shadow-xl w-full max-w-lg md:max-w-xl max-h-[90vh] flex flex-col"
               initial={{ opacity: 0, scale: 0.95, y: 20 }}
               animate={{ opacity: 1, scale: 1, y: 0 }}
               exit={{ opacity: 0, scale: 0.95, y: 20 }}
@@ -145,7 +145,7 @@ const ProjectImportModal = ({ isOpen, onClose, repo }) => {
               </div>
 
               {/* Content */}
-              <div className="p-6">
+              <div className="p-6 overflow-y-auto">
                 <div className="mb-4">
                   <h3 className="font-semibold text-lg text-gray-900 mb-2">{repo.name}</h3>
                   <a
@@ -238,7 +238,7 @@ const ProjectImportModal = ({ isOpen, onClose, repo }) => {
                       value={customDomain}
                       onChange={(e) => setCustomDomain(e.target.value)}
                       placeholder="myproject"
-                      className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-primary-500 focus:border-transparent text-sm"
+                      className="w-full px-3 pr-20 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-primary-500 focus:border-transparent text-sm"
                       disabled={loading}
                       required
                     />
