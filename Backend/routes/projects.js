@@ -142,8 +142,30 @@ router.post('/', authenticateToken, async (req, res) => {
     try {
       const user = await User.findById(req.user._id);
       if (user && user.accessToken) {
-        const webhookUrl = `${process.env.BASE_URL || 'http://localhost:5000'}/api/github/webhook`;
+        const baseDomain = process.env.BASE_DOMAIN;
+        let webhookUrl;
+
+        if (process.env.NODE_ENV === 'production') {
+          if (!baseDomain) {
+            throw new Error('BASE_DOMAIN is not configured in production. Set BASE_DOMAIN to your deployed public domain (without scheme).');
+          }
+
+          const sanitizedDomain = baseDomain.replace(/^https?:\/\//i, '').replace(/\/$/, '');
+          webhookUrl = `https://${sanitizedDomain}/api/github/webhook`;
+        } else {
+          const localUrl = 'http://localhost:5000';
+          webhookUrl = `${localUrl}/api/github/webhook`;
+        }
+
         const secret = process.env.GITHUB_WEBHOOK_SECRET || 'default-secret';
+
+        if (process.env.NODE_ENV === 'production' && !webhookUrl.startsWith('https://')) {
+          throw new Error(`Invalid production webhook URL: ${webhookUrl}. BASE_DOMAIN must resolve to HTTPS in production.`);
+        }
+
+        if (webhookUrl.startsWith('http://') && !webhookUrl.includes('localhost') && !webhookUrl.includes('127.0.0.1')) {
+          console.warn(`⚠️ GitHub webhook URL is not HTTPS; GitHub may reject it: ${webhookUrl}`);
+        }
 
         const webhook = await githubService.createWebhook(
           repositoryOwner,

@@ -236,27 +236,51 @@ class GitHubService {
    * @param {string} secret - Webhook secret
    * @returns {Promise<Object>} Webhook details
    */
+  validateWebhookUrl(webhookUrl) {
+    if (!webhookUrl) {
+      throw new Error('Webhook URL is required');
+    }
+
+    const isLocalhost = /^http:\/\/(localhost|127\.0\.0\.1)(:\d+)?\//i.test(webhookUrl);
+    if (!/^https?:\/\//i.test(webhookUrl)) {
+      throw new Error('Webhook URL must start with http:// or https://');
+    }
+
+    if (webhookUrl.startsWith('http://') && !isLocalhost) {
+      throw new Error('GitHub webhook URL must use HTTPS unless it is a localhost URL');
+    }
+
+    return isLocalhost;
+  }
+
   async createWebhook(owner, repo, accessToken, webhookUrl, secret) {
     try {
-      if (!webhookUrl) {
-        throw new Error(`Webhook URL is missing for ${owner}/${repo}`);
-      }
+      this.validateWebhookUrl(webhookUrl);
+
       // First check if user has admin access
       const hasAdminAccess = await this.checkRepoAdminAccess(owner, repo, accessToken);
       if (!hasAdminAccess) {
         console.log(`Skipping webhook creation for ${owner}/${repo} - user lacks admin access`);
         return null;
       }
+
       console.log(`📡 Creating webhook for ${owner}/${repo} → ${webhookUrl}`);
+
+      const config = {
+        url: webhookUrl,
+        content_type: 'json',
+        secret: secret
+      };
+
+      if (webhookUrl.startsWith('https://')) {
+        config.insecure_ssl = '0';
+      }
+
       const response = await axios.post(`${this.baseURL}/repos/${owner}/${repo}/hooks`, {
         name: 'web',
         active: true,
         events: ['push'],
-        config: {
-          url: webhookUrl,
-          content_type: 'json',
-          secret: secret
-        }
+        config
       }, {
         headers: {
           'Authorization': `token ${accessToken}`,
@@ -275,9 +299,10 @@ class GitHubService {
     } catch (error) {
       console.error('❌ Error creating webhook:', {
         status: error.response?.status,
-        data: error.response?.data
+        data: error.response?.data,
+        errors: error.response?.data?.errors,
+        message: error.message
       });
-      // console.error('Error creating webhook:', error.response?.data || error.message);
       throw new Error('Failed to create webhook');
     }
   }
