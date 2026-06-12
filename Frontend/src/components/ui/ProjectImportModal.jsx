@@ -2,6 +2,7 @@ import { useState, useEffect } from "react";
 import { motion, AnimatePresence } from "framer-motion";
 import { useToast } from "../../contexts/ToastContext";
 import { apiService } from "../../services/apiService";
+import config from "../../config";
 
 const ProjectImportModal = ({ isOpen, onClose, repo }) => {
   const { showSuccess, showError } = useToast();
@@ -61,7 +62,7 @@ const ProjectImportModal = ({ isOpen, onClose, repo }) => {
       showError('Subdomain must start and end with alphanumeric, 1-63 characters, letters/numbers/hyphens only.');
       return;
     }
-    fullCustomDomain = `${subdomain}.sthara.fun`;
+    fullCustomDomain = `${subdomain}.${config.BASE_DOMAIN}`;
 
     setLoading(true);
     try {
@@ -243,11 +244,11 @@ const ProjectImportModal = ({ isOpen, onClose, repo }) => {
                       required
                     />
                     <span className="absolute right-3 top-1/2 transform -translate-y-1/2 text-gray-500 text-sm pointer-events-none">
-                      .sthara.fun
+                      .{config.BASE_DOMAIN}
                     </span>
                   </div>
                   <p className="mt-1 text-xs text-gray-500">
-                    Choose a unique subdomain for your project (e.g., myproject.sthara.fun). This is required for deployment.
+                    Choose a unique subdomain for your project (e.g., myproject.{config.BASE_DOMAIN}). This is required for deployment.
                   </p>
                 </div>
               </div>

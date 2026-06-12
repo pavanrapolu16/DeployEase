@@ -10,7 +10,7 @@ const fs = require('fs').promises;
 const subdomainHandler = async (req, res, next) => {
   try {
     const host = req.headers.host;
-    const baseDomain = process.env.BASE_DOMAIN || 'sthara.fun';
+    const baseDomain = process.env.BASE_DOMAIN || 'deployease.app';
     // console.log(`[SUBDOMAIN] Middleware triggered for host: ${host}`);
 
     // Skip if no host header or if it's the main domain
@@ -130,7 +130,7 @@ const subdomainHandler = async (req, res, next) => {
               <h1>Project Not Found</h1>
               <div class="subtitle">This subdomain doesn't have a deployed project yet</div>
               <p class="message">There is no project running on this server. If you want to deploy your project, sign up for DeployEase and start building!</p>
-              <a href="https://sthara.fun" class="btn">🚀 Start Deploying Now</a>
+              <a href="https://${baseDomain}" class="btn">🚀 Start Deploying Now</a>
             </div>
           </body>
           </html>
