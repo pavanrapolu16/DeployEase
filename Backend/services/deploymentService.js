@@ -559,6 +559,50 @@ CMD ["npm", "start"]
     });
   }
 
+  async waitForHttp(host = '127.0.0.1', port = 3000, path = '/', timeoutMs = 15000) {
+    const http = require('http');
+    const start = Date.now();
+
+    return new Promise((resolve, reject) => {
+      const check = () => {
+        const req = http.request({ hostname: host, port, path, method: 'GET', timeout: 2000 }, (res) => {
+          const statusCode = res.statusCode || 0;
+          res.resume();
+          if (statusCode >= 200 && statusCode < 500) {
+            resolve();
+          } else {
+            if (Date.now() - start > timeoutMs) {
+              reject(new Error(`HTTP check failed with status ${statusCode}`));
+            } else {
+              setTimeout(check, 500);
+            }
+          }
+        });
+
+        req.on('error', (error) => {
+          if (Date.now() - start > timeoutMs) {
+            reject(new Error(`HTTP check error: ${error.message}`));
+          } else {
+            setTimeout(check, 500);
+          }
+        });
+
+        req.on('timeout', () => {
+          req.destroy();
+          if (Date.now() - start > timeoutMs) {
+            reject(new Error('HTTP check timed out')); 
+          } else {
+            setTimeout(check, 500);
+          }
+        });
+
+        req.end();
+      };
+
+      check();
+    });
+  }
+
   /**
    * Run Docker container for Node.js projects
    */
@@ -598,20 +642,19 @@ CMD ["npm", "start"]
           const containerId = stdout.trim();
           await deployment.addLog('info', `✅ Container started successfully with ID: ${containerId}`);
 
-          // Ensure Docker network exists for the container
-          try {
-            const networkName = await this.ensureDockerNetwork();
-            await deployment.addLog('info', `✅ Docker network ready: ${networkName}`);
-          } catch (networkError) {
-            await deployment.addLog('warn', `⚠️ Docker network setup failed: ${networkError.message}`);
-          }
-
-          // Wait for the container port to become available before continuing
           try {
             await this.waitForPort(availablePort, '127.0.0.1', 15000);
             await deployment.addLog('info', `✅ Container port ${availablePort} is accepting connections`);
           } catch (waitError) {
             await deployment.addLog('warn', `⚠️ Container readiness check failed: ${waitError.message}`);
+          }
+
+          // Verify HTTP readiness on the container
+          try {
+            await this.waitForHttp('127.0.0.1', availablePort, '/');
+            await deployment.addLog('info', `✅ Container HTTP endpoint is responding on port ${availablePort}`);
+          } catch (httpError) {
+            await deployment.addLog('warn', `⚠️ HTTP readiness check failed: ${httpError.message}`);
           }
 
           // Store container info in deployment

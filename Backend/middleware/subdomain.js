@@ -164,11 +164,13 @@ const subdomainHandler = async (req, res, next) => {
         headers: {
           ...req.headers,
           host: req.headers.host || `localhost:${containerPort}`,
+          Connection: 'close',
           'x-forwarded-for': req.ip || req.socket.remoteAddress,
           'x-forwarded-proto': req.protocol || (req.secure ? 'https' : 'http'),
           'x-forwarded-host': req.headers.host || `localhost:${containerPort}`
         },
-        timeout: 10000
+        timeout: 10000,
+        agent: false
       };
 
       const proxyReq = http.request(options, (proxyRes) => {
@@ -180,6 +182,13 @@ const subdomainHandler = async (req, res, next) => {
 
         proxyRes.on('error', (error) => {
           console.error(`[SUBDOMAIN] Proxy response error: ${error.message}`);
+        });
+
+        proxyRes.on('end', () => {
+          // Ensure the Express response ends when proxy response ends
+          if (!res.writableEnded) {
+            res.end();
+          }
         });
 
         // Pipe response body
