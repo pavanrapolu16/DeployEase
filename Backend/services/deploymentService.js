@@ -579,6 +579,9 @@ CMD ["npm", "start"]
           deployment.addLog('warn', `⚠️ Docker network setup failed: ${networkError.message}`);
         }
 
+        const networkFlag = `--network ${networkName}`;
+        const runCommand = `sudo docker run -d --name ${containerName} ${networkFlag} -e PORT=3000 -p ${availablePort}:3000 ${imageName}`;
+
         deployment.addLog('info', `🚀 Run command: ${runCommand}`);
 
         exec(runCommand, { cwd: deploymentDir }, async (error, stdout, stderr) => {
