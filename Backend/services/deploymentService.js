@@ -559,40 +559,40 @@ CMD ["npm", "start"]
     });
   }
 
-  async waitForHttp(host = '127.0.0.1', port = 3000, path = '/', timeoutMs = 15000) {
+  async waitForHttp(host = '127.0.0.1', port = 3000, path = '/', timeoutMs = 30000) {
     const http = require('http');
     const start = Date.now();
 
     return new Promise((resolve, reject) => {
       const check = () => {
-        const req = http.request({ hostname: host, port, path, method: 'GET', timeout: 2000 }, (res) => {
+        const req = http.request({ hostname: host, port, path, method: 'GET', timeout: 3000 }, (res) => {
           const statusCode = res.statusCode || 0;
           res.resume();
           if (statusCode >= 200 && statusCode < 500) {
             resolve();
           } else {
             if (Date.now() - start > timeoutMs) {
-              reject(new Error(`HTTP check failed with status ${statusCode}`));
+              reject(new Error(`HTTP check failed with status ${statusCode} after ${timeoutMs}ms`));
             } else {
-              setTimeout(check, 500);
+              setTimeout(check, 1000);
             }
           }
         });
 
         req.on('error', (error) => {
           if (Date.now() - start > timeoutMs) {
-            reject(new Error(`HTTP check error: ${error.message}`));
+            reject(new Error(`HTTP check failed after ${timeoutMs}ms: ${error.message}`));
           } else {
-            setTimeout(check, 500);
+            setTimeout(check, 1000);
           }
         });
 
         req.on('timeout', () => {
           req.destroy();
           if (Date.now() - start > timeoutMs) {
-            reject(new Error('HTTP check timed out')); 
+            reject(new Error(`HTTP check timed out after ${timeoutMs}ms`)); 
           } else {
-            setTimeout(check, 500);
+            setTimeout(check, 1000);
           }
         });
 
