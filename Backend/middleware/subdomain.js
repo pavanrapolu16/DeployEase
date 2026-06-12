@@ -157,14 +157,18 @@ const subdomainHandler = async (req, res, next) => {
       const url = require('url');
 
       const options = {
-        hostname: 'localhost',
+        hostname: '127.0.0.1',
         port: containerPort,
         path: req.url,
         method: req.method,
         headers: {
           ...req.headers,
-          host: `localhost:${containerPort}` // Override host header
-        }
+          host: req.headers.host || `localhost:${containerPort}`,
+          'x-forwarded-for': req.ip || req.socket.remoteAddress,
+          'x-forwarded-proto': req.protocol || (req.secure ? 'https' : 'http'),
+          'x-forwarded-host': req.headers.host || `localhost:${containerPort}`
+        },
+        timeout: 10000
       };
 
       const proxyReq = http.request(options, (proxyRes) => {
@@ -174,13 +178,30 @@ const subdomainHandler = async (req, res, next) => {
           res.setHeader(key, proxyRes.headers[key]);
         });
 
+        proxyRes.on('error', (error) => {
+          console.error(`[SUBDOMAIN] Proxy response error: ${error.message}`);
+        });
+
         // Pipe response body
         proxyRes.pipe(res);
       });
 
+      proxyReq.on('timeout', () => {
+        console.error(`[SUBDOMAIN] Proxy request timed out to ${proxyUrl}`);
+        proxyReq.destroy(new Error('Proxy timeout'));
+      });
+
       proxyReq.on('error', (error) => {
         console.error(`[SUBDOMAIN] Proxy error: ${error.message}`);
-        res.status(500).send('Service temporarily unavailable');
+        if (!res.headersSent) {
+          res.status(502).send('Service temporarily unavailable');
+        }
+      });
+
+      res.on('close', () => {
+        if (!res.writableEnded) {
+          proxyReq.destroy();
+        }
       });
 
       // Pipe request body if present

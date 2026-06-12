@@ -500,6 +500,65 @@ CMD ["npm", "start"]
     });
   }
 
+  async ensureDockerNetwork(networkName = process.env.DOCKER_NETWORK || 'deployease-net') {
+    return new Promise((resolve, reject) => {
+      exec(`sudo docker network ls --filter name=^${networkName}$ --format '{{.Name}}'`, (error, stdout, stderr) => {
+        if (error) {
+          return reject(new Error(`Failed to check Docker networks: ${stderr || error.message}`));
+        }
+
+        if (stdout.trim() === networkName) {
+          resolve(networkName);
+          return;
+        }
+
+        exec(`sudo docker network create ${networkName}`, (createError, createStdout, createStderr) => {
+          if (createError) {
+            return reject(new Error(`Failed to create Docker network: ${createStderr || createError.message}`));
+          }
+          resolve(networkName);
+        });
+      });
+    });
+  }
+
+  async waitForPort(port, host = '127.0.0.1', timeoutMs = 10000) {
+    const net = require('net');
+    const start = Date.now();
+
+    return new Promise((resolve, reject) => {
+      const check = () => {
+        const socket = new net.Socket();
+
+        socket.setTimeout(1000);
+        socket.once('error', () => {
+          socket.destroy();
+          if (Date.now() - start > timeoutMs) {
+            reject(new Error(`Port ${port} did not become available within ${timeoutMs}ms`));
+          } else {
+            setTimeout(check, 200);
+          }
+        });
+
+        socket.once('timeout', () => {
+          socket.destroy();
+          if (Date.now() - start > timeoutMs) {
+            reject(new Error(`Port ${port} did not become available within ${timeoutMs}ms`));
+          } else {
+            setTimeout(check, 200);
+          }
+        });
+
+        socket.connect(port, host, () => {
+          socket.end();
+          resolve();
+        });
+      };
+
+      check();
+    });
+  }
+
   /**
    * Run Docker container for Node.js projects
    */
@@ -512,11 +571,14 @@ CMD ["npm", "start"]
         const availablePort = await this.findAvailablePort(3000);
         deployment.addLog('info', `🔍 Found available port: ${availablePort}`);
 
-        const runCommand = `sudo docker run -d --name ${containerName} -p ${availablePort}:3000 ${imageName}`;
+        const networkName = process.env.DOCKER_NETWORK || 'deployease-net';
+        try {
+          await this.ensureDockerNetwork(networkName);
+          deployment.addLog('info', `✅ Docker network ready: ${networkName}`);
+        } catch (networkError) {
+          deployment.addLog('warn', `⚠️ Docker network setup failed: ${networkError.message}`);
+        }
 
-        deployment.addLog('info', '🚀 Starting Docker container...');
-        deployment.addLog('info', `🏷️ Container name: ${containerName}`);
-        deployment.addLog('info', `🔌 Port mapping: ${availablePort}:3000`);
         deployment.addLog('info', `🚀 Run command: ${runCommand}`);
 
         exec(runCommand, { cwd: deploymentDir }, async (error, stdout, stderr) => {
@@ -532,6 +594,22 @@ CMD ["npm", "start"]
 
           const containerId = stdout.trim();
           await deployment.addLog('info', `✅ Container started successfully with ID: ${containerId}`);
+
+          // Ensure Docker network exists for the container
+          try {
+            const networkName = await this.ensureDockerNetwork();
+            await deployment.addLog('info', `✅ Docker network ready: ${networkName}`);
+          } catch (networkError) {
+            await deployment.addLog('warn', `⚠️ Docker network setup failed: ${networkError.message}`);
+          }
+
+          // Wait for the container port to become available before continuing
+          try {
+            await this.waitForPort(availablePort, '127.0.0.1', 15000);
+            await deployment.addLog('info', `✅ Container port ${availablePort} is accepting connections`);
+          } catch (waitError) {
+            await deployment.addLog('warn', `⚠️ Container readiness check failed: ${waitError.message}`);
+          }
 
           // Store container info in deployment
           try {
